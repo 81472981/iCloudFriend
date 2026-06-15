@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('iCloudFriend', {
   scanBackup: () => ipcRenderer.invoke('backup:scan'),
   getShareStatus: () => ipcRenderer.invoke('share:status'),
   createShare: () => ipcRenderer.invoke('share:create'),
+  getReceiverStatus: () => ipcRenderer.invoke('receiver:status'),
   onBackupUpdate: (callback) => {
     const listener = (_event, stats) => callback(stats);
     ipcRenderer.on('backup:update', listener);

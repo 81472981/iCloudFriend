@@ -5,11 +5,13 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { pathExists, scanBackupRoot } = require('./backupIndex');
+const { createReceiverServer } = require('./receiverServer');
 
 let mainWindow;
 let settings;
 let watcher;
 let scanTimer;
+let receiverServer;
 
 const DEFAULT_SHARE_NAME = 'iCloudFriend';
 const IOS_TARGET_FOLDER = 'Backup';
@@ -55,6 +57,7 @@ function settingsWithConnection() {
     smbUrl: `smb://${hostname}/${shareName}`,
     smbTargetUrl: `smb://${hostname}/${shareName}/${encodedTarget}`,
     uncPath: `\\\\${hostname}\\${shareName}`,
+    receiver: receiverServer?.status() || null,
     platform: process.platform,
     username: os.userInfo().username
   };
@@ -90,6 +93,12 @@ function createWindow() {
 async function initialize() {
   settings = await readSettings();
   await ensureBackupFolders();
+  receiverServer = createReceiverServer({
+    getBackupRoot: () => path.join(backupTargetRoot(), '.icloudfriend'),
+    certDirectory: path.join(app.getPath('userData'), 'receiver-cert'),
+    onChanged: scheduleScan
+  });
+  await receiverServer.start();
   createWindow();
   restartWatcher();
 }
@@ -101,6 +110,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  receiverServer?.stop();
 });
 
 app.on('activate', () => {
@@ -138,6 +151,8 @@ ipcMain.handle('backup:scan', async () => {
   const stats = await scanBackupRoot(backupTargetRoot());
   return stats;
 });
+
+ipcMain.handle('receiver:status', async () => receiverServer?.status() || null);
 
 ipcMain.handle('share:status', async () => {
   return readShareStatus();

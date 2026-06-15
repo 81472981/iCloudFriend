@@ -87,6 +87,23 @@ struct BackupProgress: Equatable {
     }
 }
 
+struct ReceiverDevice: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let hostName: String
+    let port: Int
+    let fingerprint: String?
+    let protocolVersion: Int
+
+    var baseURL: URL {
+        URL(string: "https://\(hostName):\(port)")!
+    }
+
+    var displayName: String {
+        name.replacingOccurrences(of: "iCloudFriend ", with: "")
+    }
+}
+
 struct AssetSidecar: Codable {
     let formatVersion: Int
     let appName: String
@@ -149,6 +166,7 @@ struct BackupEvent: Codable {
 
 enum BackupError: LocalizedError {
     case noDestination
+    case noReceiver
     case photosDenied
     case destinationAccessFailed
     case noResources(String)
@@ -157,6 +175,8 @@ enum BackupError: LocalizedError {
         switch self {
         case .noDestination:
             return "Choose the Windows SMB folder first."
+        case .noReceiver:
+            return "Select a Windows receiver first. Keep both devices on the same Wi-Fi and the Windows app open."
         case .photosDenied:
             return "Photo library access is required to back up iCloud Photos."
         case .destinationAccessFailed:

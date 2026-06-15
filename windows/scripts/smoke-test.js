@@ -1,8 +1,10 @@
 const assert = require('assert');
 const fs = require('fs/promises');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 const { scanBackupRoot } = require('../src/backupIndex');
+const { createReceiverServer } = require('../src/receiverServer');
 
 async function main() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'icloudfriend-smoke-'));
@@ -29,7 +31,116 @@ async function main() {
   assert.equal(stats.resourceCount, 1);
   assert.equal(stats.totalBytes, 1024);
   assert.equal(stats.recent[0].firstFilename, 'IMG_0001.HEIC');
+
+  await testReceiverServer();
   console.log('Smoke test passed.');
+}
+
+async function testReceiverServer() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'icloudfriend-receiver-'));
+  const backupRoot = path.join(root, 'Backup', '.icloudfriend');
+  const receiver = createReceiverServer({
+    getBackupRoot: () => backupRoot,
+    certDirectory: path.join(root, 'cert'),
+    onChanged: () => {}
+  });
+
+  try {
+    await receiver.start();
+    const base = `https://127.0.0.1:${receiver.status().port}`;
+    const hello = await requestJson('GET', `${base}/api/hello`);
+    assert.equal(hello.app, 'iCloudFriend');
+
+    const payload = Buffer.from('hello-photo');
+    const relativePath = 'assets/2026/06/test-asset/resources/IMG_0001.HEIC';
+    const initial = await requestJson('POST', `${base}/api/resource/status`, {
+      relativePath,
+      byteCount: payload.length
+    });
+    assert.equal(initial.complete, false);
+    assert.equal(initial.offset, 0);
+
+    const uploaded = await requestJson(
+      'PUT',
+      `${base}/api/resource?relativePath=${encodeURIComponent(relativePath)}&offset=0`,
+      payload,
+      {
+        'content-type': 'application/octet-stream',
+        'x-expected-bytes': String(payload.length)
+      }
+    );
+    assert.equal(uploaded.complete, true);
+
+    const sidecar = {
+      formatVersion: 1,
+      appName: 'iCloudFriend',
+      backedUpAt: new Date().toISOString(),
+      asset: {
+        localIdentifier: 'receiver-asset',
+        fingerprint: 'fingerprint',
+        mediaType: 'image'
+      },
+      resources: [
+        {
+          storedFilename: 'IMG_0001.HEIC',
+          byteCount: payload.length
+        }
+      ]
+    };
+    const event = {
+      type: 'assetBackedUp',
+      localIdentifier: 'receiver-asset',
+      assetFolder: 'assets/2026/06/test-asset',
+      resourceCount: 1,
+      backedUpAt: new Date().toISOString()
+    };
+
+    await requestJson('POST', `${base}/api/asset/commit`, {
+      assetFolder: 'assets/2026/06/test-asset',
+      sidecar,
+      event
+    });
+
+    const stats = await scanBackupRoot(path.join(root, 'Backup'));
+    assert.equal(stats.assetCount, 1);
+    assert.equal(stats.resourceCount, 1);
+    assert.equal(stats.totalBytes, payload.length);
+  } finally {
+    await receiver.stop();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
+function requestJson(method, url, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const isJson = body && !Buffer.isBuffer(body) && typeof body !== 'string';
+    const data = body ? Buffer.from(isJson ? JSON.stringify(body) : body) : null;
+    const request = https.request(url, {
+      method,
+      rejectUnauthorized: false,
+      headers: {
+        ...(isJson ? { 'content-type': 'application/json' } : {}),
+        ...(data ? { 'content-length': data.length } : {}),
+        ...headers
+      }
+    }, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`${response.statusCode}: ${text}`));
+          return;
+        }
+        resolve(text ? JSON.parse(text) : {});
+      });
+    });
+    request.on('error', reject);
+    if (data) {
+      request.write(data);
+    }
+    request.end();
+  });
 }
 
 main().catch((error) => {

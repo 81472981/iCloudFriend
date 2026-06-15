@@ -1,6 +1,6 @@
 # Backup Format
 
-The backup root is the `Backup` folder selected in the iOS app inside the Windows SMB share.
+The backup root is the `Backup` folder managed by the Windows app. iOS uploads resources to the Windows receiver, and the receiver writes them under `.icloudfriend`.
 
 ```text
 <iCloudFriend share>/Backup/
@@ -39,7 +39,7 @@ When export completes successfully, the file is atomically renamed to:
 resources/<filename>
 ```
 
-If a transfer is interrupted, the next sync checks the `.partial` length and appends only the remaining bytes. Completed files are hashed with SHA-256 and reused.
+If a transfer is interrupted, the next sync asks the Windows receiver for the `.partial` length and uploads only the remaining bytes. Completed files are hashed with SHA-256 and reused.
 
 ## Metadata Sidecar
 
@@ -64,7 +64,7 @@ The iOS app keeps a local JSON state file in Application Support:
 sync-state.json
 ```
 
-For incremental sync, it skips an asset only when the stored fingerprint still matches the current Photos asset. Full sync scans all assets and refreshes the sidecar, but still avoids rewriting completed resources.
+For incremental sync, it skips an asset only when the stored fingerprint still matches the current Photos asset and the Windows receiver confirms the matching metadata exists. Full sync scans all assets and refreshes the sidecar, but still avoids rewriting completed resources.
 
 ## Windows Monitoring
 
@@ -73,4 +73,4 @@ The Windows desktop app treats `metadata.json` as the authoritative completion m
 - total assets
 - total bytes
 - recent completed backups
-- share status and SMB connection address
+- receiver status, share status, and connection details

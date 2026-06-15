@@ -22,6 +22,8 @@
 		100000000000000000000113 /* ProgressRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000213 /* ProgressRing.swift */; };
 		100000000000000000000114 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000214 /* ContentView.swift */; };
 		100000000000000000000115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000215 /* Assets.xcassets */; };
+		100000000000000000000116 /* ReceiverDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000217 /* ReceiverDiscovery.swift */; };
+		100000000000000000000117 /* ReceiverClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000218 /* ReceiverClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +44,8 @@
 		100000000000000000000214 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		100000000000000000000215 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		100000000000000000000216 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		100000000000000000000217 /* ReceiverDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverDiscovery.swift; sourceTree = "<group>"; };
+		100000000000000000000218 /* ReceiverClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +107,8 @@
 				100000000000000000000209 /* AssetResourceExporter.swift */,
 				100000000000000000000210 /* BackupBackgroundTask.swift */,
 				100000000000000000000211 /* BackupManager.swift */,
+				100000000000000000000217 /* ReceiverDiscovery.swift */,
+				100000000000000000000218 /* ReceiverClient.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -209,6 +215,8 @@
 				100000000000000000000112 /* FolderPicker.swift in Sources */,
 				100000000000000000000113 /* ProgressRing.swift in Sources */,
 				100000000000000000000114 /* ContentView.swift in Sources */,
+				100000000000000000000116 /* ReceiverDiscovery.swift in Sources */,
+				100000000000000000000117 /* ReceiverClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

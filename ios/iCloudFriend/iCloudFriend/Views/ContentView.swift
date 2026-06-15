@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var destinationStore: DestinationBookmarkStore
+    @ObservedObject var receiverDiscovery: ReceiverDiscovery
     @ObservedObject var backupManager: BackupManager
 
     @State private var selectedMode: BackupMode = .incremental
-    @State private var showingFolderPicker = false
 
     var body: some View {
         NavigationStack {
@@ -24,7 +23,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 22) {
                         header
-                        destinationCard
+                        receiverCard
                         modeCard
                         progressCard
                         logCard
@@ -35,12 +34,6 @@ struct ContentView: View {
             .navigationTitle("iCloudFriend")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .sheet(isPresented: $showingFolderPicker) {
-                FolderPicker { url in
-                    destinationStore.save(url: url)
-                    showingFolderPicker = false
-                }
-            }
         }
     }
 
@@ -59,7 +52,7 @@ struct ContentView: View {
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Original photos, videos, Live Photo pairs, and metadata are saved together on your SMB share.")
+            Text("Original photos, videos, Live Photo pairs, and metadata are sent directly to your Windows receiver.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.78))
         }
@@ -76,43 +69,55 @@ struct ContentView: View {
             .foregroundStyle(.white)
     }
 
-    private var destinationCard: some View {
+    private var receiverCard: some View {
         card {
             VStack(alignment: .leading, spacing: 14) {
-                Label("Windows SMB Folder", systemImage: "externaldrive.connected.to.line.below")
-                    .font(.headline)
-
-                Text(destinationStore.destinationLabel)
-                    .font(.system(.body, design: .rounded).weight(.semibold))
-                    .lineLimit(2)
-                    .foregroundStyle(destinationStore.destinationURL == nil ? .secondary : .primary)
-
-                if destinationStore.bookmarkIsStale {
-                    Label("Folder permission needs to be refreshed.", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                HStack {
+                    Label("Windows Receiver", systemImage: "wifi.router.fill")
+                        .font(.headline)
+                    Spacer()
+                    Button {
+                        receiverDiscovery.refresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
                 }
 
-                HStack {
-                    Button {
-                        showingFolderPicker = true
-                    } label: {
-                        Label("Choose Folder", systemImage: "folder.badge.plus")
+                if receiverDiscovery.devices.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(receiverDiscovery.isScanning ? "Searching same Wi-Fi network..." : "No Windows receiver found")
+                            .font(.system(.body, design: .rounded).weight(.semibold))
+                        Text("Open the Windows iCloudFriend app on the same Wi-Fi. It advertises a local TLS receiver automatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderedProminent)
-
-                    if destinationStore.destinationURL != nil {
-                        Button("Forget") {
-                            destinationStore.clear()
+                } else {
+                    ForEach(receiverDiscovery.devices) { device in
+                        Button {
+                            receiverDiscovery.select(device)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: receiverDiscovery.selectedDevice == device ? "checkmark.circle.fill" : "desktopcomputer")
+                                    .foregroundStyle(receiverDiscovery.selectedDevice == device ? .green : .secondary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(device.displayName)
+                                        .font(.system(.body, design: .rounded).weight(.semibold))
+                                    Text("\(device.hostName):\(device.port) · TLS")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.plain)
                     }
                 }
 
                 Label {
-                    Text("Connect to the Windows SMB server in the Files app first, then choose the Backup folder inside the iCloudFriend share. The share name itself may not be selectable on iOS.")
+                    Text("Discovery uses Bonjour on your local network. Transfers are sent directly to the Windows app over local TLS; no cloud server is used.")
                 } icon: {
-                    Image(systemName: "info.circle.fill")
+                    Image(systemName: "lock.shield.fill")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -171,7 +176,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(destinationStore.destinationURL == nil)
+                    .disabled(receiverDiscovery.selectedDevice == nil)
                 }
             }
         }
@@ -227,6 +232,6 @@ struct ContentView: View {
 }
 
 #Preview {
-    let destination = DestinationBookmarkStore()
-    return ContentView(destinationStore: destination, backupManager: BackupManager(destinationStore: destination))
+    let discovery = ReceiverDiscovery()
+    return ContentView(receiverDiscovery: discovery, backupManager: BackupManager(receiverDiscovery: discovery))
 }

@@ -23,7 +23,13 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>iCloudFriend needs access to back up your original photos, videos, and metadata to your Windows SMB folder.</string>
+	<string>iCloudFriend needs access to back up your original photos, videos, and metadata to your Windows receiver.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>iCloudFriend uses the local network to discover and connect to your Windows backup receiver.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_icloudfriend._tcp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

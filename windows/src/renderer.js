@@ -4,6 +4,9 @@ const elements = {
   shareState: document.getElementById('shareState'),
   backupRoot: document.getElementById('backupRoot'),
   smbUrl: document.getElementById('smbUrl'),
+  receiverUrl: document.getElementById('receiverUrl'),
+  receiverState: document.getElementById('receiverState'),
+  receiverFingerprint: document.getElementById('receiverFingerprint'),
   targetFolder: document.getElementById('targetFolder'),
   userHint: document.getElementById('userHint'),
   assetCount: document.getElementById('assetCount'),
@@ -91,8 +94,9 @@ function renderSettings(settings) {
   elements.smbUrl.textContent = settings.smbUrl;
   elements.targetFolder.textContent = settings.targetFolderName || 'Backup';
   elements.userHint.textContent = settings.platform === 'win32'
-    ? `Connect from iPhone with your Windows account: ${settings.username}. Pick the ${settings.targetFolderName || 'Backup'} folder after connecting.`
-    : 'SMB share creation becomes active when this app runs on Windows.';
+    ? `Windows account: ${settings.username}. iPhone can auto-discover this receiver when both devices are on the same Wi-Fi.`
+    : 'Receiver preview is running locally. SMB share creation becomes active when this app runs on Windows.';
+  renderReceiver(settings.receiver);
 }
 
 function renderShareStatus(status) {
@@ -105,6 +109,19 @@ function renderShareStatus(status) {
     return;
   }
   elements.shareState.textContent = 'Share not created';
+}
+
+function renderReceiver(receiver) {
+  if (!receiver?.running) {
+    elements.receiverUrl.textContent = 'Receiver offline';
+    elements.receiverState.textContent = 'Offline';
+    elements.receiverFingerprint.textContent = '';
+    return;
+  }
+
+  elements.receiverUrl.textContent = receiver.baseUrl || `Port ${receiver.port}`;
+  elements.receiverState.textContent = 'TLS online';
+  elements.receiverFingerprint.textContent = `Certificate SHA-256: ${shortFingerprint(receiver.fingerprint)}`;
 }
 
 function renderStats(stats) {
@@ -211,6 +228,13 @@ function showToast(message) {
   toastTimer = setTimeout(() => {
     elements.toast.hidden = true;
   }, 3600);
+}
+
+function shortFingerprint(value) {
+  if (!value) {
+    return 'unknown';
+  }
+  return `${value.slice(0, 12)}...${value.slice(-12)}`;
 }
 
 boot().catch((error) => {

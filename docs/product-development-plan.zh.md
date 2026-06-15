@@ -14,7 +14,7 @@ iCloudFriend 是面向 iPhone 用户的本地优先照片备份工具。它把 i
 
 当前最应该坚持的三条价值主张：
 
-- 便捷：不依赖数据线和复杂专业工具，Windows 端负责准备共享目录，iPhone 端负责选择目标文件夹并启动备份。
+- 便捷：不依赖数据线和复杂专业工具，Windows 端自动广播接收服务，iPhone 端发现设备后即可启动备份。
 - 经济：核心备份能力免费，后续用高级管理能力支撑一次性买断。
 - 隐私安全：照片不进入 iCloudFriend 自有服务器，备份目标由用户自己控制。
 
@@ -31,10 +31,10 @@ iCloudFriend 是面向 iPhone 用户的本地优先照片备份工具。它把 i
 
 需要校准的表述：
 
-- 当前项目实现路径是 iOS Files Provider + SMB/NAS 目录，不是自研无线协议。外部表达建议使用“局域网备份到 Windows/SMB 共享”，避免承诺“自动直连”。
-- 计划书中同时出现“高速 Wi-Fi”和“USB 3.0 极速传输”。当前代码没有 USB 传输能力，短期应统一为 Wi-Fi / SMB。
+- 当前项目实现路径是 Bonjour 自动发现 + Windows 本地 HTTPS/TLS 接收器 + 可选 SMB/NAS 共享浏览。外部表达建议使用“局域网备份到 Windows”，不要再要求用户手动选择 SMB 文件夹作为主流程。
+- 计划书中同时出现“高速 Wi-Fi”和“USB 3.0 极速传输”。当前代码没有 USB 传输能力，短期应统一为 Wi-Fi 局域网传输。
 - 如果照片原片不在本机，iOS 会从 iCloud 下载原始资源后再写入 SMB。营销上应说明“照片传输到电脑的过程不上云，但下载 iCloud 原片可能需要联网”。
-- 当前没有应用层端到端加密。可以说“数据不经过我们的服务器”，暂时不要承诺“点对点加密”或“银行级加密”，除非后续实现并验证。
+- 当前传输链路使用本地 HTTPS/TLS，证书由 Windows 接收端生成。可以说“数据不经过我们的服务器，并通过本地 TLS 传输”，暂时不要承诺“银行级加密”，除非后续引入配对码、证书固定和完整安全审计。
 - 市场规模、速度 XXMB/s、备份 100GB 耗时、58% 隐私担忧等数据需要补来源或通过测试替换。
 
 ## 3. 当前实现对照
@@ -45,14 +45,14 @@ iCloudFriend 是面向 iPhone 用户的本地优先照片备份工具。它把 i
 - Photos 原始资源枚举与导出：`AssetMetadataBuilder.swift`、`AssetResourceExporter.swift`
 - `.partial` 文件续传与最终文件原子替换
 - SHA-256 校验、metadata sidecar、events.ndjson
-- Windows 端创建/修复 SMB share、展示连接信息、监控备份索引
+- Windows 端 Bonjour 广播、TLS 接收服务、资源断点续传接口、创建/修复 SMB share、展示连接信息、监控备份索引
 - Windows smoke test 与基本构建说明
 - 备份格式文档：`docs/backup-format.md`
 
 尚未覆盖或只覆盖一部分的能力：
 
 - 首次使用向导、错误诊断、权限/网络/SMB 失败自助修复
-- 自动发现 Windows 电脑或自动配对
+- 配对码/证书固定/设备授权列表
 - 备份完成后的完整性验证报告
 - 从备份恢复到电脑目录或导回 Photos 的流程
 - AI 分类、去重、HEIC 转换、付费授权、额度限制
@@ -67,8 +67,8 @@ iCloudFriend 是面向 iPhone 用户的本地优先照片备份工具。它把 i
 
 必须完成：
 
-- Windows 端创建 `iCloudFriend/Backup` 共享目录，并稳定展示 `smb://...` 地址。
-- iPhone 端选择 `Backup` 文件夹后，可以完成 Full 和 Incremental 两种模式。
+- Windows 端创建 `iCloudFriend/Backup` 目录，启动 Bonjour/TLS 接收服务，并稳定展示接收器状态。
+- iPhone 端自动发现 Windows 接收器后，可以完成 Full 和 Incremental 两种模式。
 - 支持 JPEG、HEIC、MOV、Live Photos、RAW/DNG、隐藏/收藏、有地理位置的素材。
 - 中断后再次运行不会重复写已完成文件，`.partial` 能继续或安全重置。
 - Windows 端能显示 asset 数、resource 数、总大小、最近备份和 metadata 错误。
@@ -86,8 +86,8 @@ iCloudFriend 是面向 iPhone 用户的本地优先照片备份工具。它把 i
 
 优先开发：
 
-- Windows 首屏引导：选择备份盘、创建共享、复制地址、显示当前 Windows 用户名。
-- iOS 首次向导：先在 Files 连接 SMB，再选择 `Backup` 文件夹，再开始备份。
+- Windows 首屏引导：选择备份盘、启动接收器、展示 Bonjour/TLS 状态、可选创建 SMB 共享。
+- iOS 首次向导：授权本地网络和照片权限，选择发现到的 Windows 设备，再开始备份。
 - 失败诊断：Photos 权限、文件夹权限失效、SMB 不可写、磁盘空间不足、网络中断。
 - 备份完成报告：本次新增资产、失败资产、耗时、平均速度、总大小、可验证校验结果。
 - 日志导出包：用户遇到问题时可发送给开发者，日志不包含照片内容和敏感路径。

@@ -38,7 +38,17 @@
           </div>
 
           <div class="share-card">
-            <p class="kicker">iPhone SMB address</p>
+            <p class="kicker">iPhone auto-discovery receiver</p>
+            <div class="copy-line">
+              <strong id="receiverUrl">Starting receiver...</strong>
+              <span class="status-dot" id="receiverState">Offline</span>
+            </div>
+            <p class="fingerprint" id="receiverFingerprint"></p>
+            <p class="hint">Keep this app open. The iPhone app discovers this receiver over Bonjour and uploads photos through local TLS.</p>
+          </div>
+
+          <div class="share-card">
+            <p class="kicker">Optional SMB/NAS address</p>
             <div class="copy-line">
               <strong id="smbUrl">smb://...</strong>
               <button id="copyUrlButton" class="button small">Copy</button>
@@ -47,7 +57,7 @@
               <span>Folder to select on iPhone</span>
               <strong id="targetFolder">Backup</strong>
             </div>
-            <p class="hint">In the iOS Files app, connect to this server first. Then open the iCloudFriend share and select the Backup folder inside it. The share name itself may not be selectable on iOS.</p>
+            <p class="hint">The Windows app stores received backups in this share folder. SMB is still available for NAS-style browsing, but iPhone backup now uses auto-discovered TLS transfer.</p>
           </div>
 
           <button id="createShareButton" class="button primary">Create or repair SMB share</button>

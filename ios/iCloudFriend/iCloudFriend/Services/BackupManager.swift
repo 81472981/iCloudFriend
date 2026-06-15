@@ -6,14 +6,14 @@ final class BackupManager: ObservableObject {
     @Published private(set) var progress = BackupProgress()
     @Published private(set) var isRunning = false
 
-    private let destinationStore: DestinationBookmarkStore
+    private let receiverDiscovery: ReceiverDiscovery
     private let stateStore = SyncStateStore()
     private let exporter = AssetResourceExporter()
     private let backgroundTask = BackupBackgroundTask()
     private var task: Task<Void, Never>?
 
-    init(destinationStore: DestinationBookmarkStore) {
-        self.destinationStore = destinationStore
+    init(receiverDiscovery: ReceiverDiscovery) {
+        self.receiverDiscovery = receiverDiscovery
     }
 
     func start(mode: BackupMode) {
@@ -47,20 +47,28 @@ final class BackupManager: ObservableObject {
         }
 
         do {
+            guard let receiver = receiverDiscovery.selectedDevice else {
+                throw BackupError.noReceiver
+            }
+
+            let client = ReceiverClient(device: receiver)
+            try await client.hello()
+            progress.appendLog("Connected to \(receiver.displayName)")
+
             try await PhotoLibraryAccess.ensureAuthorized()
             let assets = PhotoLibraryAccess.fetchAllAssets()
             progress.status = .running
             progress.totalAssets = assets.count
             progress.appendLog("Found \(assets.count) library assets")
 
-            try await destinationStore.access { rootURL in
-                let backupRoot = rootURL.appendingPathComponent(".icloudfriend", isDirectory: true)
-                try self.prepareBackupRoot(backupRoot)
+            let tempBackupRoot = try makeTemporaryBackupRoot()
+            defer {
+                try? FileManager.default.removeItem(at: tempBackupRoot.deletingLastPathComponent())
+            }
 
-                for asset in assets {
-                    try Task.checkCancellation()
-                    await self.backup(asset: asset, mode: mode, backupRoot: backupRoot)
-                }
+            for asset in assets {
+                try Task.checkCancellation()
+                await self.backup(asset: asset, mode: mode, backupRoot: tempBackupRoot, client: client)
             }
 
             if Task.isCancelled {
@@ -82,7 +90,7 @@ final class BackupManager: ObservableObject {
         }
     }
 
-    private func backup(asset: PHAsset, mode: BackupMode, backupRoot: URL) async {
+    private func backup(asset: PHAsset, mode: BackupMode, backupRoot: URL, client: ReceiverClient) async {
         let resources = AssetMetadataBuilder.resources(for: asset)
         let displayName = resources.first?.originalFilename ?? asset.localIdentifier
         progress.currentAssetName = displayName
@@ -104,7 +112,7 @@ final class BackupManager: ObservableObject {
             if mode == .incremental,
                let record = await stateStore.record(for: asset.localIdentifier),
                record.fingerprint == fingerprint,
-               FileManager.default.fileExists(atPath: metadataURL.path) {
+               try await client.assetIsCurrent(assetFolder: relativeAssetFolder, fingerprint: fingerprint) {
                 progress.completedAssets += 1
                 progress.appendLog("Already current: \(displayName)")
                 return
@@ -133,6 +141,23 @@ final class BackupManager: ObservableObject {
                 }
 
                 backedUpResources.append(record)
+
+                var lastUploadedBytes: Int64 = 0
+                try await client.uploadResource(
+                    fileURL: targetURL,
+                    relativePath: record.relativePath,
+                    byteCount: record.byteCount
+                ) { [weak self] uploadedBytes in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        let delta = max(0, uploadedBytes - lastUploadedBytes)
+                        lastUploadedBytes = uploadedBytes
+                        self.progress.copiedBytes += delta
+                        self.progress.resourceProgress = record.byteCount > 0
+                            ? min(1, Double(uploadedBytes) / Double(record.byteCount))
+                            : 1
+                    }
+                }
             }
 
             let sidecar = AssetMetadataBuilder.sidecar(
@@ -142,16 +167,15 @@ final class BackupManager: ObservableObject {
             )
             try writeJSON(sidecar, to: metadataURL)
 
-            try appendEvent(
-                BackupEvent(
-                    type: "assetBackedUp",
-                    localIdentifier: asset.localIdentifier,
-                    assetFolder: relativeAssetFolder,
-                    resourceCount: backedUpResources.count,
-                    backedUpAt: Date()
-                ),
-                backupRoot: backupRoot
+            let event = BackupEvent(
+                type: "assetBackedUp",
+                localIdentifier: asset.localIdentifier,
+                assetFolder: relativeAssetFolder,
+                resourceCount: backedUpResources.count,
+                backedUpAt: Date()
             )
+            try appendEvent(event, backupRoot: backupRoot)
+            try await client.commitAsset(sidecar: sidecar, event: event, assetFolder: relativeAssetFolder)
 
             try await stateStore.upsert(
                 SyncRecord(
@@ -165,12 +189,22 @@ final class BackupManager: ObservableObject {
             progress.completedAssets += 1
             progress.resourceProgress = 1
             progress.appendLog("Backed up \(displayName)")
+            try? FileManager.default.removeItem(at: assetFolder)
         } catch is CancellationError {
             progress.appendLog("Interrupted while backing up \(displayName)")
         } catch {
             progress.failedAssets += 1
             progress.appendLog("Failed \(displayName): \(error.localizedDescription)")
         }
+    }
+
+    private func makeTemporaryBackupRoot() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iCloudFriendUploadCache", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(".icloudfriend", isDirectory: true)
+        try prepareBackupRoot(root)
+        return root
     }
 
     private func prepareBackupRoot(_ backupRoot: URL) throws {

@@ -69,7 +69,8 @@ button {
 }
 
 .hero-status,
-.pill {
+.pill,
+.status-dot {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -84,6 +85,11 @@ button {
 .pill {
   color: var(--green);
   background: rgba(19, 163, 107, 0.1);
+}
+
+.status-dot {
+  color: var(--green);
+  background: rgba(19, 163, 107, 0.12);
 }
 
 .eyebrow,
@@ -261,6 +267,14 @@ h3 {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.fingerprint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .stats-grid {
