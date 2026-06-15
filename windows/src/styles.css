@@ -230,6 +230,32 @@ h3 {
   white-space: nowrap;
 }
 
+.target-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(19, 163, 107, 0.10);
+  color: #0f5e42;
+}
+
+.target-box span {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.target-box strong {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--green);
+}
+
 .hint {
   margin: 8px 0 0;
   color: var(--muted);

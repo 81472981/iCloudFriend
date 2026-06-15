@@ -23,6 +23,8 @@ The app uses public Apple frameworks only:
 
 iOS does not expose a general public SMB socket API for third-party apps. The app therefore uses the system Files provider: the user connects to the Windows SMB share in Files, then grants this app folder access with the document picker. The actual transfer still goes over SMB/NAS, handled by iOS.
 
+The Windows app creates a `Backup` folder inside the `iCloudFriend` SMB share. In the iOS document picker, choose that `Backup` folder after connecting through Files. The SMB share root can appear as a location rather than a selectable folder on iOS, so selecting the child folder is the reliable path.
+
 ## Windows App
 
 From the `windows` folder:
@@ -53,6 +55,7 @@ Creating or repairing a Windows SMB share requires administrator approval. The W
 The recommended setup is:
 
 - share name: `iCloudFriend`
-- path: a folder under `Pictures` or a dedicated backup drive
+- share path: a folder under `Pictures` or a dedicated backup drive
+- iPhone target folder: `Backup` inside the share
 - access: the current Windows user has change access
 - iPhone connects with that Windows username and password

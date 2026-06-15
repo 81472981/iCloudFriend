@@ -108,6 +108,14 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                     }
                 }
+
+                Label {
+                    Text("Connect to the Windows SMB server in the Files app first, then choose the Backup folder inside the iCloudFriend share. The share name itself may not be selectable on iOS.")
+                } icon: {
+                    Image(systemName: "info.circle.fill")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
     }

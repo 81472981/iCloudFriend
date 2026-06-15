@@ -1,9 +1,9 @@
 # Backup Format
 
-The backup root is the SMB share folder selected in the iOS app and managed by the Windows app.
+The backup root is the `Backup` folder selected in the iOS app inside the Windows SMB share.
 
 ```text
-<share root>/
+<iCloudFriend share>/Backup/
   .icloudfriend/
     assets/
       <year>/

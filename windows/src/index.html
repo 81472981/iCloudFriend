@@ -22,7 +22,7 @@
         <article class="panel setup-panel">
           <div class="panel-heading">
             <div>
-              <p class="kicker">Windows folder</p>
+              <p class="kicker">Windows share folder</p>
               <h2>Backup destination</h2>
             </div>
             <button id="refreshButton" class="icon-button" title="Refresh">↻</button>
@@ -43,7 +43,11 @@
               <strong id="smbUrl">smb://...</strong>
               <button id="copyUrlButton" class="button small">Copy</button>
             </div>
-            <p class="hint">Use this address in the iOS Files app, then pick the connected folder inside iCloudFriend on iPhone.</p>
+            <div class="target-box">
+              <span>Folder to select on iPhone</span>
+              <strong id="targetFolder">Backup</strong>
+            </div>
+            <p class="hint">In the iOS Files app, connect to this server first. Then open the iCloudFriend share and select the Backup folder inside it. The share name itself may not be selectable on iOS.</p>
           </div>
 
           <button id="createShareButton" class="button primary">Create or repair SMB share</button>

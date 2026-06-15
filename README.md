@@ -8,7 +8,7 @@ iCloudFriend is a two-part backup system for moving the original assets from iCl
 
 ## What Gets Backed Up
 
-Each asset is stored as a folder under the Windows share:
+Each asset is stored as a folder under the `Backup` folder inside the Windows share:
 
 ```text
 .icloudfriend/
@@ -35,7 +35,7 @@ The app exports all available `PHAssetResource` entries for an asset, including 
 1. On Windows, run the desktop app from `windows` and choose a backup folder.
 2. Click `Create SMB Share` in the Windows app. Windows will ask for administrator approval because creating an SMB share requires it.
 3. On iPhone, open the Files app and connect to `smb://<PC-NAME>/iCloudFriend`.
-4. In the iOS app, choose that shared folder as the backup destination.
+4. In the iOS app, open `Choose Folder`, enter the connected share, and choose the `Backup` folder inside it. iOS may not allow selecting the SMB share root itself.
 5. Start `Full sync` the first time. Use `Incremental sync` after that.
 
 Build details are in [docs/build.md](docs/build.md), and the on-disk protocol is in [docs/backup-format.md](docs/backup-format.md).

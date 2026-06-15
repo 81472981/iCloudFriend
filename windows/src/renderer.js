@@ -4,6 +4,7 @@ const elements = {
   shareState: document.getElementById('shareState'),
   backupRoot: document.getElementById('backupRoot'),
   smbUrl: document.getElementById('smbUrl'),
+  targetFolder: document.getElementById('targetFolder'),
   userHint: document.getElementById('userHint'),
   assetCount: document.getElementById('assetCount'),
   resourceCount: document.getElementById('resourceCount'),
@@ -88,8 +89,9 @@ async function refreshShare() {
 function renderSettings(settings) {
   elements.backupRoot.textContent = settings.backupRoot;
   elements.smbUrl.textContent = settings.smbUrl;
+  elements.targetFolder.textContent = settings.targetFolderName || 'Backup';
   elements.userHint.textContent = settings.platform === 'win32'
-    ? `Connect from iPhone with your Windows account: ${settings.username}`
+    ? `Connect from iPhone with your Windows account: ${settings.username}. Pick the ${settings.targetFolderName || 'Backup'} folder after connecting.`
     : 'SMB share creation becomes active when this app runs on Windows.';
 }
 

@@ -12,6 +12,7 @@ let watcher;
 let scanTimer;
 
 const DEFAULT_SHARE_NAME = 'iCloudFriend';
+const IOS_TARGET_FOLDER = 'Backup';
 
 function defaultSettings() {
   return {
@@ -37,7 +38,7 @@ async function writeSettings(nextSettings) {
   settings = { ...settings, ...nextSettings };
   await fs.mkdir(app.getPath('userData'), { recursive: true });
   await fs.writeFile(configPath(), JSON.stringify(settings, null, 2));
-  await fs.mkdir(settings.backupRoot, { recursive: true });
+  await ensureBackupFolders();
   restartWatcher();
   return settingsWithConnection();
 }
@@ -45,14 +46,27 @@ async function writeSettings(nextSettings) {
 function settingsWithConnection() {
   const hostname = os.hostname();
   const shareName = settings?.shareName || DEFAULT_SHARE_NAME;
+  const encodedTarget = encodeURIComponent(IOS_TARGET_FOLDER);
   return {
     ...settings,
     hostname,
+    backupTargetRoot: backupTargetRoot(),
+    targetFolderName: IOS_TARGET_FOLDER,
     smbUrl: `smb://${hostname}/${shareName}`,
+    smbTargetUrl: `smb://${hostname}/${shareName}/${encodedTarget}`,
     uncPath: `\\\\${hostname}\\${shareName}`,
     platform: process.platform,
     username: os.userInfo().username
   };
+}
+
+function backupTargetRoot() {
+  return path.join(settings.backupRoot, IOS_TARGET_FOLDER);
+}
+
+async function ensureBackupFolders() {
+  await fs.mkdir(settings.backupRoot, { recursive: true });
+  await fs.mkdir(backupTargetRoot(), { recursive: true });
 }
 
 function createWindow() {
@@ -75,7 +89,7 @@ function createWindow() {
 
 async function initialize() {
   settings = await readSettings();
-  await fs.mkdir(settings.backupRoot, { recursive: true });
+  await ensureBackupFolders();
   createWindow();
   restartWatcher();
 }
@@ -116,12 +130,12 @@ ipcMain.handle('dialog:choose-folder', async () => {
 });
 
 ipcMain.handle('folder:open', async () => {
-  await fs.mkdir(settings.backupRoot, { recursive: true });
-  return shell.openPath(settings.backupRoot);
+  await ensureBackupFolders();
+  return shell.openPath(backupTargetRoot());
 });
 
 ipcMain.handle('backup:scan', async () => {
-  const stats = await scanBackupRoot(settings.backupRoot);
+  const stats = await scanBackupRoot(backupTargetRoot());
   return stats;
 });
 
@@ -130,8 +144,8 @@ ipcMain.handle('share:status', async () => {
 });
 
 ipcMain.handle('share:create', async () => {
-  await fs.mkdir(settings.backupRoot, { recursive: true });
-  const result = await createOrRepairShare(settings.backupRoot, settings.shareName);
+  await ensureBackupFolders();
+  const result = await createOrRepairShare(settings.backupRoot, settings.shareName, IOS_TARGET_FOLDER);
   restartWatcher();
   return result;
 });
@@ -139,7 +153,7 @@ ipcMain.handle('share:create', async () => {
 function restartWatcher() {
   stopWatcher();
 
-  const watchRoot = path.join(settings.backupRoot, '.icloudfriend');
+  const watchRoot = path.join(backupTargetRoot(), '.icloudfriend');
   fs.mkdir(watchRoot, { recursive: true }).then(() => {
     watcher = legacyFs.watch(watchRoot, { recursive: true }, () => {
       scheduleScan();
@@ -171,7 +185,7 @@ function scheduleScan() {
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
     }
-    const stats = await scanBackupRoot(settings.backupRoot);
+    const stats = await scanBackupRoot(backupTargetRoot());
     mainWindow.webContents.send('backup:update', stats);
   }, 450);
 }
@@ -220,7 +234,7 @@ async function readShareStatus() {
   }
 }
 
-async function createOrRepairShare(backupRoot, shareName) {
+async function createOrRepairShare(backupRoot, shareName, targetFolderName) {
   if (process.platform !== 'win32') {
     return {
       ok: false,
@@ -231,9 +245,11 @@ async function createOrRepairShare(backupRoot, shareName) {
   const script = [
     "$ErrorActionPreference = 'Stop'",
     `$path = ${psQuote(backupRoot)}`,
+    `$targetPath = Join-Path $path ${psQuote(targetFolderName)}`,
     `$name = ${psQuote(shareName || DEFAULT_SHARE_NAME)}`,
     '$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name',
     'New-Item -ItemType Directory -Force -Path $path | Out-Null',
+    'New-Item -ItemType Directory -Force -Path $targetPath | Out-Null',
     '$share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue',
     'if ($null -eq $share) {',
     '  New-SmbShare -Name $name -Path $path -ChangeAccess $identity -Description "iCloudFriend photo backup target" | Out-Null',
@@ -241,7 +257,7 @@ async function createOrRepairShare(backupRoot, shareName) {
     '  Set-SmbShare -Name $name -Description "iCloudFriend photo backup target" -Force | Out-Null',
     '}',
     'Grant-SmbShareAccess -Name $name -AccountName $identity -AccessRight Change -Force | Out-Null',
-    '@{ ok = $true; name = $name; path = $path; identity = $identity } | ConvertTo-Json -Compress'
+    '@{ ok = $true; name = $name; path = $path; targetPath = $targetPath; identity = $identity } | ConvertTo-Json -Compress'
   ].join('\n');
 
   const result = await runElevatedPowerShell(script);
