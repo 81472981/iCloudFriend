@@ -1,0 +1,56 @@
+{
+  "name": "icloudfriend-windows",
+  "version": "1.0.0",
+  "description": "Windows desktop receiver for iCloudFriend SMB photo backups.",
+  "main": "src/main.js",
+  "author": "iCloudFriend",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/backupIndex.js && node --check scripts/smoke-test.js",
+    "smoke": "node scripts/smoke-test.js",
+    "dist:win": "electron-builder --win portable nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.icloudfriend.windows",
+    "productName": "iCloudFriend",
+    "artifactName": "iCloudFriend-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

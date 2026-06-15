@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+dist/
+out/
+*.log
+*.partial
+xcuserdata/
+*.xcuserdatad/
+*.xcuserdata/
+*.xcuserstate
+DerivedData/
+ios/iCloudFriend/build/
+windows/dist/
+windows/.vite/

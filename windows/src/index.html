@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iCloudFriend</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">SMB photo backup receiver</p>
+          <h1>iCloudFriend</h1>
+          <p class="hero-copy">A clean Windows home for original iCloud Photos, Live Photos, videos, and metadata sidecars.</p>
+        </div>
+        <div class="hero-status" id="shareState">Checking share...</div>
+      </section>
+
+      <section class="grid">
+        <article class="panel setup-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Windows folder</p>
+              <h2>Backup destination</h2>
+            </div>
+            <button id="refreshButton" class="icon-button" title="Refresh">↻</button>
+          </div>
+
+          <div class="folder-box">
+            <span id="backupRoot">Loading...</span>
+          </div>
+
+          <div class="button-row">
+            <button id="chooseFolderButton" class="button secondary">Choose folder</button>
+            <button id="openFolderButton" class="button secondary">Open folder</button>
+          </div>
+
+          <div class="share-card">
+            <p class="kicker">iPhone SMB address</p>
+            <div class="copy-line">
+              <strong id="smbUrl">smb://...</strong>
+              <button id="copyUrlButton" class="button small">Copy</button>
+            </div>
+            <p class="hint">Use this address in the iOS Files app, then pick the connected folder inside iCloudFriend on iPhone.</p>
+          </div>
+
+          <button id="createShareButton" class="button primary">Create or repair SMB share</button>
+          <p class="hint" id="userHint">Windows will ask for administrator approval only for share creation.</p>
+        </article>
+
+        <article class="panel stats-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Backup library</p>
+              <h2>Live index</h2>
+            </div>
+            <span class="pill" id="watchState">Watching</span>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat">
+              <span id="assetCount">0</span>
+              <label>Assets</label>
+            </div>
+            <div class="stat">
+              <span id="resourceCount">0</span>
+              <label>Resources</label>
+            </div>
+            <div class="stat">
+              <span id="totalBytes">0 MB</span>
+              <label>Backed up</label>
+            </div>
+            <div class="stat">
+              <span id="freeBytes">...</span>
+              <label>Free disk</label>
+            </div>
+          </div>
+
+          <div class="recent-heading">
+            <h3>Recent assets</h3>
+            <span id="errorCount"></span>
+          </div>
+          <div id="recentList" class="recent-list"></div>
+        </article>
+      </section>
+
+      <section class="panel footer-panel">
+        <div>
+          <p class="kicker">Backup format</p>
+          <h2>Originals plus metadata</h2>
+        </div>
+        <div class="format-grid">
+          <div>
+            <strong>Original files</strong>
+            <p>HEIC, JPEG, MOV, RAW, Live Photo pairs, and adjustment resources exported from Photos.</p>
+          </div>
+          <div>
+            <strong>Metadata sidecar</strong>
+            <p>Creation date, modification date, location, dimensions, favorite state, resource checksums.</p>
+          </div>
+          <div>
+            <strong>Resume support</strong>
+            <p>Interrupted transfers continue from `.partial` files and complete with an atomic rename.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>
