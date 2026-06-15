@@ -38,4 +38,4 @@ The app exports all available `PHAssetResource` entries for an asset, including 
 4. In the iOS app, open `Choose Folder`, enter the connected share, and choose the `Backup` folder inside it. iOS may not allow selecting the SMB share root itself.
 5. Start `Full sync` the first time. Use `Incremental sync` after that.
 
-Build details are in [docs/build.md](docs/build.md), and the on-disk protocol is in [docs/backup-format.md](docs/backup-format.md).
+Build details are in [docs/build.md](docs/build.md), the on-disk protocol is in [docs/backup-format.md](docs/backup-format.md), the business plan deck is in [docs/iCloudFriend商业计划书.pptx](docs/iCloudFriend商业计划书.pptx), and the product development plan is in [docs/product-development-plan.zh.md](docs/product-development-plan.zh.md).
