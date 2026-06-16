@@ -1,49 +1,47 @@
 const api = window.iCloudFriend;
 
 const elements = {
-  shareState: document.getElementById('shareState'),
   backupRoot: document.getElementById('backupRoot'),
-  smbUrl: document.getElementById('smbUrl'),
-  receiverUrl: document.getElementById('receiverUrl'),
+  deviceName: document.getElementById('deviceName'),
+  connectionState: document.getElementById('connectionState'),
   receiverState: document.getElementById('receiverState'),
-  receiverFingerprint: document.getElementById('receiverFingerprint'),
-  targetFolder: document.getElementById('targetFolder'),
-  userHint: document.getElementById('userHint'),
   assetCount: document.getElementById('assetCount'),
-  resourceCount: document.getElementById('resourceCount'),
-  totalBytes: document.getElementById('totalBytes'),
-  freeBytes: document.getElementById('freeBytes'),
-  recentList: document.getElementById('recentList'),
-  errorCount: document.getElementById('errorCount'),
-  watchState: document.getElementById('watchState'),
+  totalAssets: document.getElementById('totalAssets'),
+  assetProgress: document.getElementById('assetProgress'),
+  backupHint: document.getElementById('backupHint'),
   toast: document.getElementById('toast'),
   chooseFolderButton: document.getElementById('chooseFolderButton'),
   openFolderButton: document.getElementById('openFolderButton'),
-  createShareButton: document.getElementById('createShareButton'),
-  copyUrlButton: document.getElementById('copyUrlButton'),
   refreshButton: document.getElementById('refreshButton')
 };
 
 let currentSettings = null;
+let currentStats = null;
+let currentReceiver = null;
 let toastTimer = null;
 
 async function boot() {
   bindEvents();
   currentSettings = await api.getSettings();
+  currentReceiver = currentSettings.receiver;
   renderSettings(currentSettings);
   await refreshAll();
   setInterval(() => {
     refreshReceiver().catch((error) => showToast(error.message || String(error)));
-  }, 5000);
-  api.onBackupUpdate((stats) => renderStats(stats));
+  }, 3000);
+  api.onBackupUpdate((stats) => {
+    currentStats = stats;
+    renderDashboard();
+  });
 }
 
 function bindEvents() {
   elements.chooseFolderButton.addEventListener('click', async () => {
     currentSettings = await api.chooseFolder();
+    currentReceiver = currentSettings.receiver;
     renderSettings(currentSettings);
     await refreshAll();
-    showToast('Backup folder updated.');
+    showToast('备份目录已更新。');
   });
 
   elements.openFolderButton.addEventListener('click', async () => {
@@ -53,190 +51,108 @@ function bindEvents() {
     }
   });
 
-  elements.createShareButton.addEventListener('click', async () => {
-    elements.createShareButton.disabled = true;
-    elements.createShareButton.textContent = 'Waiting for Windows approval...';
-    try {
-      const result = await api.createShare();
-      await refreshShare();
-      showToast(result.ok ? 'SMB share is ready.' : result.message || 'Share creation needs attention.');
-    } finally {
-      elements.createShareButton.disabled = false;
-      elements.createShareButton.textContent = 'Create or repair SMB share';
-    }
-  });
-
-  elements.copyUrlButton.addEventListener('click', async () => {
-    if (!currentSettings?.smbUrl) {
-      return;
-    }
-    await navigator.clipboard.writeText(currentSettings.smbUrl);
-    showToast('SMB address copied.');
-  });
-
   elements.refreshButton.addEventListener('click', refreshAll);
 }
 
 async function refreshAll() {
-  await Promise.all([refreshStats(), refreshShare(), refreshReceiver()]);
+  await Promise.all([refreshStats(), refreshReceiver()]);
 }
 
 async function refreshStats() {
-  elements.watchState.textContent = 'Scanning';
-  const stats = await api.scanBackup();
-  renderStats(stats);
-}
-
-async function refreshShare() {
-  const status = await api.getShareStatus();
-  renderShareStatus(status);
+  currentStats = await api.scanBackup();
+  renderDashboard();
 }
 
 async function refreshReceiver() {
-  const receiver = await api.getReceiverStatus();
-  currentSettings = { ...currentSettings, receiver };
-  renderReceiver(receiver);
+  currentReceiver = await api.getReceiverStatus();
+  renderDashboard();
 }
 
 function renderSettings(settings) {
-  elements.backupRoot.textContent = settings.backupRoot;
-  elements.smbUrl.textContent = settings.smbUrl;
-  elements.targetFolder.textContent = settings.targetFolderName || 'Backup';
-  elements.userHint.textContent = settings.platform === 'win32'
-    ? `Windows account: ${settings.username}. iPhone can auto-discover this receiver when both devices are on the same Wi-Fi.`
-    : 'Receiver preview is running locally. SMB share creation becomes active when this app runs on Windows.';
-  renderReceiver(settings.receiver);
+  elements.backupRoot.textContent = settings.backupTargetRoot || settings.backupRoot;
 }
 
-function renderShareStatus(status) {
-  if (!status.supported) {
-    elements.shareState.textContent = 'Preview mode';
-    return;
-  }
-  if (status.exists) {
-    elements.shareState.textContent = `Share ready: ${status.name}`;
-    return;
-  }
-  elements.shareState.textContent = 'Share not created';
+function renderDashboard() {
+  renderDevice();
+  renderCounts();
 }
 
-function renderReceiver(receiver) {
-  elements.receiverState.classList.remove('warning', 'offline');
+function renderDevice() {
+  const sync = latestSyncStatus();
 
-  if (!receiver?.running) {
-    elements.receiverUrl.textContent = 'Receiver offline';
-    elements.receiverState.textContent = 'Offline';
-    elements.receiverState.classList.add('offline');
-    elements.receiverFingerprint.textContent = '';
-    return;
-  }
+  elements.deviceName.textContent = sync?.deviceName || '等待 iOS 连接';
+  elements.receiverState.textContent = currentReceiver?.running ? '已启动' : '未启动';
 
-  elements.receiverUrl.textContent = receiver.baseUrl || `Port ${receiver.port}`;
-  elements.receiverState.textContent = receiver.discoveryAvailable === false ? 'Discovery limited' : 'TLS online';
-  elements.receiverState.classList.toggle('warning', receiver.discoveryAvailable === false);
-
-  const details = [`Certificate SHA-256: ${shortFingerprint(receiver.fingerprint)}`];
-  if (receiver.discoveryAvailable === false && receiver.discoveryMessage) {
-    details.push(receiver.discoveryMessage);
-  }
-  elements.receiverFingerprint.textContent = details.join(' | ');
+  const state = connectionState(sync);
+  elements.connectionState.textContent = state.label;
+  elements.connectionState.className = `state-pill ${state.tone}`;
 }
 
-function renderStats(stats) {
-  elements.watchState.textContent = stats.exists ? 'Watching' : 'Waiting';
-  elements.assetCount.textContent = formatNumber(stats.assetCount);
-  elements.resourceCount.textContent = formatNumber(stats.resourceCount);
-  elements.totalBytes.textContent = formatBytes(stats.totalBytes);
-  elements.freeBytes.textContent = stats.disk ? formatBytes(stats.disk.freeBytes) : 'Unknown';
+function renderCounts() {
+  const sync = latestSyncStatus();
+  const total = Number(sync?.totalAssets || 0);
+  const displayTotal = total > 0 ? total : null;
+  const scannedBackups = Number(currentStats?.assetCount || 0);
+  const reportedCompleted = Number(sync?.completedAssets || 0);
+  const rawBackedUp = Math.max(scannedBackups, reportedCompleted);
+  const backedUp = displayTotal ? Math.min(rawBackedUp, displayTotal) : rawBackedUp;
+  const percent = displayTotal ? Math.min(100, Math.round((backedUp / displayTotal) * 100)) : 0;
 
-  if (stats.errors.length > 0) {
-    elements.errorCount.textContent = `${stats.errors.length} metadata issue${stats.errors.length === 1 ? '' : 's'}`;
+  elements.assetCount.textContent = formatNumber(backedUp);
+  elements.totalAssets.textContent = displayTotal ? formatNumber(displayTotal) : '--';
+  elements.assetProgress.style.width = `${percent}%`;
+
+  if (displayTotal) {
+    elements.backupHint.textContent = `已备份 ${formatNumber(backedUp)} / ${formatNumber(displayTotal)} 张，完成 ${percent}%。`;
+  } else if (backedUp > 0) {
+    elements.backupHint.textContent = `已备份 ${formatNumber(backedUp)} 张，等待 iOS 上报相册总数量。`;
   } else {
-    elements.errorCount.textContent = '';
+    elements.backupHint.textContent = '等待 iOS 设备连接并开始备份。';
   }
-
-  if (!stats.exists) {
-    elements.recentList.innerHTML = '<p class="muted">No backup index yet. Start a sync from the iPhone app.</p>';
-    return;
-  }
-
-  if (stats.recent.length === 0) {
-    elements.recentList.innerHTML = '<p class="muted">No completed assets yet.</p>';
-    return;
-  }
-
-  elements.recentList.replaceChildren(...stats.recent.map(renderRecentItem));
 }
 
-function renderRecentItem(item) {
-  const row = document.createElement('div');
-  row.className = 'recent-item';
-
-  const left = document.createElement('div');
-  const title = document.createElement('strong');
-  title.textContent = item.firstFilename || 'Photo asset';
-  const detail = document.createElement('span');
-  detail.textContent = `${item.mediaType} · ${item.resourceCount} resource${item.resourceCount === 1 ? '' : 's'} · ${formatBytes(item.byteCount)}`;
-  left.append(title, detail);
-
-  const right = document.createElement('small');
-  right.textContent = formatDate(item.backedUpAt || item.creationDate);
-
-  row.append(left, right);
-  return row;
+function latestSyncStatus() {
+  return currentReceiver?.sync || currentStats?.syncStatus || null;
 }
 
-function formatBytes(value) {
-  const number = Number(value || 0);
-  if (number === 0) {
-    return '0 MB';
+function connectionState(sync) {
+  if (!currentReceiver?.running) {
+    return { label: '未启动', tone: 'offline' };
   }
-  return new Intl.NumberFormat(undefined, {
-    style: 'unit',
-    unit: bestByteUnit(number),
-    unitDisplay: 'short',
-    maximumFractionDigits: 1
-  }).format(convertBytes(number));
+
+  if (!sync) {
+    return { label: '等待连接', tone: 'waiting' };
+  }
+
+  if (sync.runStatus === 'running') {
+    return { label: isFresh(sync.updatedAt) ? '正在备份' : '最近连接', tone: 'online' };
+  }
+
+  if (sync.runStatus === 'finished') {
+    return { label: '已完成', tone: 'online' };
+  }
+
+  if (sync.runStatus === 'failed') {
+    return { label: '备份失败', tone: 'warning' };
+  }
+
+  if (sync.runStatus === 'cancelled') {
+    return { label: '已取消', tone: 'waiting' };
+  }
+
+  return { label: '已连接', tone: 'online' };
 }
 
-function bestByteUnit(bytes) {
-  if (bytes >= 1024 ** 3) {
-    return 'gigabyte';
+function isFresh(value) {
+  const time = Date.parse(value || '');
+  if (Number.isNaN(time)) {
+    return false;
   }
-  if (bytes >= 1024 ** 2) {
-    return 'megabyte';
-  }
-  return 'kilobyte';
-}
-
-function convertBytes(bytes) {
-  if (bytes >= 1024 ** 3) {
-    return bytes / 1024 ** 3;
-  }
-  if (bytes >= 1024 ** 2) {
-    return bytes / 1024 ** 2;
-  }
-  return Math.max(1, bytes / 1024);
+  return Date.now() - time < 45_000;
 }
 
 function formatNumber(value) {
   return new Intl.NumberFormat().format(value || 0);
-}
-
-function formatDate(value) {
-  if (!value) {
-    return 'Unknown';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown';
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
 }
 
 function showToast(message) {
@@ -245,14 +161,7 @@ function showToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     elements.toast.hidden = true;
-  }, 3600);
-}
-
-function shortFingerprint(value) {
-  if (!value) {
-    return 'unknown';
-  }
-  return `${value.slice(0, 12)}...${value.slice(-12)}`;
+  }, 3200);
 }
 
 boot().catch((error) => {

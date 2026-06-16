@@ -44,14 +44,20 @@ function configPath() {
 async function readSettings() {
   try {
     const data = await fs.readFile(configPath(), 'utf8');
-    return { ...defaultSettings(), ...JSON.parse(data) };
+    const rawSettings = { ...defaultSettings(), ...JSON.parse(data) };
+    const normalized = normalizeSettings(rawSettings);
+    if (normalized.backupRoot !== rawSettings.backupRoot) {
+      await fs.mkdir(app.getPath('userData'), { recursive: true });
+      await fs.writeFile(configPath(), JSON.stringify(normalized, null, 2));
+    }
+    return normalized;
   } catch {
-    return defaultSettings();
+    return normalizeSettings(defaultSettings());
   }
 }
 
 async function writeSettings(nextSettings) {
-  settings = { ...settings, ...nextSettings };
+  settings = normalizeSettings({ ...settings, ...nextSettings });
   await fs.mkdir(app.getPath('userData'), { recursive: true });
   await fs.writeFile(configPath(), JSON.stringify(settings, null, 2));
   await ensureBackupFolders();
@@ -78,10 +84,29 @@ function settingsWithConnection() {
 }
 
 function backupTargetRoot() {
-  if (path.basename(settings.backupRoot).toLowerCase() === IOS_TARGET_FOLDER.toLowerCase()) {
-    return settings.backupRoot;
+  const backupRoot = normalizeBackupRootPath(settings.backupRoot);
+  if (path.basename(backupRoot).toLowerCase() === IOS_TARGET_FOLDER.toLowerCase()) {
+    return backupRoot;
   }
-  return path.join(settings.backupRoot, IOS_TARGET_FOLDER);
+  return path.join(backupRoot, IOS_TARGET_FOLDER);
+}
+
+function normalizeSettings(value) {
+  return {
+    ...value,
+    backupRoot: normalizeBackupRootPath(value.backupRoot || defaultSettings().backupRoot)
+  };
+}
+
+function normalizeBackupRootPath(value) {
+  let normalized = path.normalize(value);
+  while (
+    path.basename(normalized).toLowerCase() === IOS_TARGET_FOLDER.toLowerCase()
+    && path.basename(path.dirname(normalized)).toLowerCase() === IOS_TARGET_FOLDER.toLowerCase()
+  ) {
+    normalized = path.dirname(normalized);
+  }
+  return normalized;
 }
 
 async function ensureBackupFolders() {
@@ -91,10 +116,10 @@ async function ensureBackupFolders() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 760,
-    minWidth: 940,
-    minHeight: 640,
+    width: 980,
+    height: 620,
+    minWidth: 780,
+    minHeight: 560,
     title: 'iCloudFriend',
     backgroundColor: '#071620',
     webPreferences: {

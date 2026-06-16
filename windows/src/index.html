@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
@@ -9,115 +9,57 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="hero">
+      <header class="topbar">
         <div>
-          <p class="eyebrow">SMB photo backup receiver</p>
-          <h1>iCloudFriend</h1>
-          <p class="hero-copy">A clean Windows home for original iCloud Photos, Live Photos, videos, and metadata sidecars.</p>
+          <p class="eyebrow">iCloudFriend Windows</p>
+          <h1>照片备份接收端</h1>
         </div>
-        <div class="hero-status" id="shareState">Checking share...</div>
-      </section>
+        <button id="refreshButton" class="button secondary">刷新</button>
+      </header>
 
-      <section class="grid">
-        <article class="panel setup-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">Windows share folder</p>
-              <h2>Backup destination</h2>
-            </div>
-            <button id="refreshButton" class="icon-button" title="Refresh">↻</button>
+      <section class="dashboard">
+        <article class="panel count-panel">
+          <p class="kicker">照片数量</p>
+          <div class="count-line">
+            <span id="assetCount">0</span>
+            <span class="slash">/</span>
+            <span id="totalAssets">--</span>
           </div>
-
-          <div class="folder-box">
-            <span id="backupRoot">Loading...</span>
+          <div class="count-labels">
+            <span>已备份</span>
+            <span>总数量</span>
           </div>
-
-          <div class="button-row">
-            <button id="chooseFolderButton" class="button secondary">Choose folder</button>
-            <button id="openFolderButton" class="button secondary">Open folder</button>
+          <div class="progress-track" aria-hidden="true">
+            <div id="assetProgress" class="progress-fill"></div>
           </div>
-
-          <div class="share-card">
-            <p class="kicker">iPhone auto-discovery receiver</p>
-            <div class="copy-line">
-              <strong id="receiverUrl">Starting receiver...</strong>
-              <span class="status-dot" id="receiverState">Offline</span>
-            </div>
-            <p class="fingerprint" id="receiverFingerprint"></p>
-            <p class="hint">Keep this app open. The iPhone app discovers this receiver over Bonjour and uploads photos through local TLS.</p>
-          </div>
-
-          <div class="share-card">
-            <p class="kicker">Optional SMB/NAS address</p>
-            <div class="copy-line">
-              <strong id="smbUrl">smb://...</strong>
-              <button id="copyUrlButton" class="button small">Copy</button>
-            </div>
-            <div class="target-box">
-              <span>Folder to select on iPhone</span>
-              <strong id="targetFolder">Backup</strong>
-            </div>
-            <p class="hint">The Windows app stores received backups in this share folder. SMB is still available for NAS-style browsing, but iPhone backup now uses auto-discovered TLS transfer.</p>
-          </div>
-
-          <button id="createShareButton" class="button primary">Create or repair SMB share</button>
-          <p class="hint" id="userHint">Windows will ask for administrator approval only for share creation.</p>
+          <p id="backupHint" class="hint">等待 iOS 设备连接并开始备份。</p>
         </article>
 
-        <article class="panel stats-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">Backup library</p>
-              <h2>Live index</h2>
-            </div>
-            <span class="pill" id="watchState">Watching</span>
+        <article class="panel device-panel">
+          <p class="kicker">终端设备</p>
+          <div class="info-row">
+            <span>设备名称</span>
+            <strong id="deviceName">等待 iOS 连接</strong>
           </div>
-
-          <div class="stats-grid">
-            <div class="stat">
-              <span id="assetCount">0</span>
-              <label>Assets</label>
-            </div>
-            <div class="stat">
-              <span id="resourceCount">0</span>
-              <label>Resources</label>
-            </div>
-            <div class="stat">
-              <span id="totalBytes">0 MB</span>
-              <label>Backed up</label>
-            </div>
-            <div class="stat">
-              <span id="freeBytes">...</span>
-              <label>Free disk</label>
-            </div>
+          <div class="info-row">
+            <span>连接状态</span>
+            <strong id="connectionState" class="state-pill waiting">等待连接</strong>
           </div>
-
-          <div class="recent-heading">
-            <h3>Recent assets</h3>
-            <span id="errorCount"></span>
+          <div class="info-row">
+            <span>接收服务</span>
+            <strong id="receiverState">启动中</strong>
           </div>
-          <div id="recentList" class="recent-list"></div>
         </article>
       </section>
 
-      <section class="panel footer-panel">
+      <section class="panel folder-panel">
         <div>
-          <p class="kicker">Backup format</p>
-          <h2>Originals plus metadata</h2>
+          <p class="kicker">Windows 备份目录</p>
+          <strong id="backupRoot">Loading...</strong>
         </div>
-        <div class="format-grid">
-          <div>
-            <strong>Original files</strong>
-            <p>HEIC, JPEG, MOV, RAW, Live Photo pairs, and adjustment resources exported from Photos.</p>
-          </div>
-          <div>
-            <strong>Metadata sidecar</strong>
-            <p>Creation date, modification date, location, dimensions, favorite state, resource checksums.</p>
-          </div>
-          <div>
-            <strong>Resume support</strong>
-            <p>Interrupted transfers continue from `.partial` files and complete with an atomic rename.</p>
-          </div>
+        <div class="button-row">
+          <button id="chooseFolderButton" class="button primary">修改目录</button>
+          <button id="openFolderButton" class="button secondary">打开目录</button>
         </div>
       </section>
     </main>

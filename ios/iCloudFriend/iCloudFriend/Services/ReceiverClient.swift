@@ -31,6 +31,18 @@ private struct AssetCommitRequest: Encodable {
     let event: BackupEvent
 }
 
+private struct SyncStatusRequest: Encodable {
+    let deviceName: String
+    let deviceIdentifier: String?
+    let mode: String
+    let runStatus: String
+    let totalAssets: Int
+    let completedAssets: Int
+    let failedAssets: Int
+    let currentAssetName: String?
+    let message: String?
+}
+
 private struct BasicResponse: Decodable {
     let ok: Bool?
 }
@@ -126,6 +138,33 @@ final class ReceiverClient: NSObject, URLSessionDelegate {
         let response: BasicResponse = try await postJSON(
             AssetCommitRequest(assetFolder: assetFolder, sidecar: sidecar, event: event),
             to: endpoint("api/asset/commit")
+        )
+        if response.ok == false {
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func updateSyncStatus(
+        deviceName: String,
+        deviceIdentifier: String?,
+        mode: BackupMode,
+        runStatus: String,
+        progress: BackupProgress,
+        message: String? = nil
+    ) async throws {
+        let response: BasicResponse = try await postJSON(
+            SyncStatusRequest(
+                deviceName: deviceName,
+                deviceIdentifier: deviceIdentifier,
+                mode: mode.rawValue,
+                runStatus: runStatus,
+                totalAssets: progress.totalAssets,
+                completedAssets: progress.completedAssets,
+                failedAssets: progress.failedAssets,
+                currentAssetName: progress.currentAssetName.isEmpty ? nil : progress.currentAssetName,
+                message: message
+            ),
+            to: endpoint("api/sync/status")
         )
         if response.ok == false {
             throw URLError(.badServerResponse)

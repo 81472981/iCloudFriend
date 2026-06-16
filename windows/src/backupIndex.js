@@ -19,12 +19,14 @@ async function scanBackupRoot(backupRoot) {
     assetCount: 0,
     resourceCount: 0,
     totalBytes: 0,
+    syncStatus: null,
     recent: [],
     errors: [],
     disk: null
   };
 
   stats.disk = await readDiskStats(backupRoot);
+  stats.syncStatus = await readSyncStatus(backupRoot);
 
   if (!stats.exists) {
     return stats;
@@ -98,6 +100,16 @@ async function readDiskStats(backupRoot) {
       freeBytes: Number(stat.bavail) * Number(stat.bsize),
       totalBytes: Number(stat.blocks) * Number(stat.bsize)
     };
+  } catch {
+    return null;
+  }
+}
+
+async function readSyncStatus(backupRoot) {
+  const syncPath = path.join(backupRoot, '.icloudfriend', 'index', 'sync-status.json');
+  try {
+    const data = await fs.readFile(syncPath, 'utf8');
+    return JSON.parse(data);
   } catch {
     return null;
   }

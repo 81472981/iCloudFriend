@@ -1,5 +1,6 @@
 import Foundation
 import Photos
+import UIKit
 
 @MainActor
 final class BackupManager: ObservableObject {
@@ -39,6 +40,7 @@ final class BackupManager: ObservableObject {
     }
 
     private func run(mode: BackupMode) async {
+        var activeClient: ReceiverClient?
         backgroundTask.begin()
         defer {
             backgroundTask.end()
@@ -52,6 +54,7 @@ final class BackupManager: ObservableObject {
             }
 
             let client = ReceiverClient(device: receiver)
+            activeClient = client
             try await client.hello()
             progress.appendLog("Connected to \(receiver.displayName)")
 
@@ -60,6 +63,7 @@ final class BackupManager: ObservableObject {
             progress.status = .running
             progress.totalAssets = assets.count
             progress.appendLog("Found \(assets.count) library assets")
+            await reportSyncStatus(client: client, mode: mode, runStatus: "running")
 
             let tempBackupRoot = try makeTemporaryBackupRoot()
             defer {
@@ -69,25 +73,55 @@ final class BackupManager: ObservableObject {
             for asset in assets {
                 try Task.checkCancellation()
                 await self.backup(asset: asset, mode: mode, backupRoot: tempBackupRoot, client: client)
+                await reportSyncStatus(client: client, mode: mode, runStatus: "running")
             }
 
             if Task.isCancelled {
                 progress.status = .cancelled
                 progress.appendLog("Backup cancelled")
+                await reportSyncStatus(client: client, mode: mode, runStatus: "cancelled")
             } else {
                 progress.status = .finished
                 progress.currentAssetName = ""
                 progress.currentResourceName = ""
                 progress.resourceProgress = 1
                 progress.appendLog("Done: \(progress.completedAssets) assets, \(progress.failedAssets) failed")
+                await reportSyncStatus(client: client, mode: mode, runStatus: "finished")
             }
         } catch is CancellationError {
             progress.status = .cancelled
             progress.appendLog("Backup cancelled")
+            if let activeClient {
+                await reportSyncStatus(client: activeClient, mode: mode, runStatus: "cancelled")
+            }
         } catch {
             progress.status = .failed(error.localizedDescription)
             progress.appendLog(error.localizedDescription)
+            if let activeClient {
+                await reportSyncStatus(
+                    client: activeClient,
+                    mode: mode,
+                    runStatus: "failed",
+                    message: error.localizedDescription
+                )
+            }
         }
+    }
+
+    private func reportSyncStatus(
+        client: ReceiverClient,
+        mode: BackupMode,
+        runStatus: String,
+        message: String? = nil
+    ) async {
+        try? await client.updateSyncStatus(
+            deviceName: UIDevice.current.name,
+            deviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
+            mode: mode,
+            runStatus: runStatus,
+            progress: progress,
+            message: message
+        )
     }
 
     private func backup(asset: PHAsset, mode: BackupMode, backupRoot: URL, client: ReceiverClient) async {

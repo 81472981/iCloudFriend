@@ -64,6 +64,20 @@ async function testReceiverServer() {
     const helloAfterDiscoveryFailure = await requestJson('GET', `${base}/api/hello`);
     assert.equal(helloAfterDiscoveryFailure.receiver.running, true);
 
+    const syncStatus = await requestJson('POST', `${base}/api/sync/status`, {
+      deviceName: 'Linda iPhone',
+      deviceIdentifier: 'device-1',
+      mode: 'full',
+      runStatus: 'running',
+      totalAssets: 42,
+      completedAssets: 7,
+      failedAssets: 0,
+      currentAssetName: 'IMG_0001.HEIC'
+    });
+    assert.equal(syncStatus.ok, true);
+    assert.equal(receiver.status().sync.deviceName, 'Linda iPhone');
+    assert.equal(receiver.status().sync.totalAssets, 42);
+
     const payload = Buffer.from('hello-photo');
     const relativePath = 'assets/2026/06/test-asset/resources/IMG_0001.HEIC';
     const initial = await requestJson('POST', `${base}/api/resource/status`, {
@@ -118,6 +132,8 @@ async function testReceiverServer() {
     assert.equal(stats.assetCount, 1);
     assert.equal(stats.resourceCount, 1);
     assert.equal(stats.totalBytes, payload.length);
+    assert.equal(stats.syncStatus.deviceName, 'Linda iPhone');
+    assert.equal(stats.syncStatus.totalAssets, 42);
   } finally {
     await receiver.stop();
     await fs.rm(root, { recursive: true, force: true });

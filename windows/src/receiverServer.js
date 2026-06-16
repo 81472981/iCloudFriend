@@ -23,6 +23,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     baseUrl: null,
     discoveryAvailable: false,
     discoveryMessage: null,
+    sync: null,
     protocolVersion: PROTOCOL_VERSION
   };
 
@@ -58,6 +59,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       baseUrl: `https://${localName}:${port}`,
       discoveryAvailable: false,
       discoveryMessage: 'Auto-discovery is starting.',
+      sync: null,
       protocolVersion: PROTOCOL_VERSION
     };
 
@@ -100,6 +102,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       baseUrl: null,
       discoveryAvailable: false,
       discoveryMessage: null,
+      sync: null,
       protocolVersion: PROTOCOL_VERSION
     };
   }
@@ -168,6 +171,11 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
         return sendJson(response, 200, await readResourceStatus(body));
       }
 
+      if (request.method === 'POST' && requestUrl.pathname === '/api/sync/status') {
+        const body = await readJson(request);
+        return sendJson(response, 200, await updateSyncStatus(body));
+      }
+
       if (request.method === 'PUT' && requestUrl.pathname === '/api/resource') {
         return sendJson(response, 200, await receiveResource(request, requestUrl));
       }
@@ -218,6 +226,33 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
 
     const partialSize = await fileSize(partialPath);
     return { complete: false, offset: partialSize };
+  }
+
+  async function updateSyncStatus(body) {
+    const nextStatus = {
+      deviceName: cleanText(body.deviceName, 'iPhone'),
+      deviceIdentifier: cleanText(body.deviceIdentifier, null),
+      mode: cleanText(body.mode, 'incremental'),
+      runStatus: cleanText(body.runStatus, 'running'),
+      totalAssets: cleanCount(body.totalAssets),
+      completedAssets: cleanCount(body.completedAssets),
+      failedAssets: cleanCount(body.failedAssets),
+      currentAssetName: cleanText(body.currentAssetName, null),
+      message: cleanText(body.message, null),
+      updatedAt: new Date().toISOString()
+    };
+
+    status = {
+      ...status,
+      sync: nextStatus
+    };
+
+    const syncPath = safeJoin(getBackupRoot(), 'index', 'sync-status.json');
+    await fs.mkdir(path.dirname(syncPath), { recursive: true });
+    await writeJsonAtomic(syncPath, nextStatus);
+    onChanged?.();
+
+    return { ok: true, sync: nextStatus };
   }
 
   async function receiveResource(request, requestUrl) {
@@ -394,6 +429,25 @@ function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+function cleanText(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  const text = String(value).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!text) {
+    return fallback;
+  }
+  return text.slice(0, 240);
+}
+
+function cleanCount(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(number));
 }
 
 async function fileSize(target) {
