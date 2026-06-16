@@ -51,6 +51,19 @@ async function testReceiverServer() {
     const hello = await requestJson('GET', `${base}/api/hello`);
     assert.equal(hello.app, 'iCloudFriend');
 
+    receiver.markDiscoveryUnavailable(Object.assign(new Error('send EHOSTUNREACH 224.0.0.251:5353'), {
+      code: 'EHOSTUNREACH',
+      address: '224.0.0.251',
+      port: 5353
+    }));
+    const degraded = receiver.status();
+    assert.equal(degraded.running, true);
+    assert.equal(degraded.discoveryAvailable, false);
+    assert.match(degraded.discoveryMessage, /Bonjour auto-discovery unavailable/);
+
+    const helloAfterDiscoveryFailure = await requestJson('GET', `${base}/api/hello`);
+    assert.equal(helloAfterDiscoveryFailure.receiver.running, true);
+
     const payload = Buffer.from('hello-photo');
     const relativePath = 'assets/2026/06/test-asset/resources/IMG_0001.HEIC';
     const initial = await requestJson('POST', `${base}/api/resource/status`, {

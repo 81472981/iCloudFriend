@@ -21,6 +21,8 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     serviceName: null,
     fingerprint: null,
     baseUrl: null,
+    discoveryAvailable: false,
+    discoveryMessage: null,
     protocolVersion: PROTOCOL_VERSION
   };
 
@@ -45,41 +47,47 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     });
 
     const port = server.address().port;
-    const hostname = os.hostname();
+    const hostname = cleanHostname();
+    const localName = localHostname();
     const serviceName = `iCloudFriend ${hostname}`;
-    bonjour = new Bonjour();
-    advertisement = bonjour.publish({
-      name: serviceName,
-      type: SERVICE_TYPE,
-      port,
-      txt: {
-        app: 'iCloudFriend',
-        version: String(PROTOCOL_VERSION),
-        tls: '1.3',
-        fingerprint: credentials.fingerprint
-      }
-    });
-
     status = {
       running: true,
       port,
       serviceName,
       fingerprint: credentials.fingerprint,
-      baseUrl: `https://${hostname}.local:${port}`,
+      baseUrl: `https://${localName}:${port}`,
+      discoveryAvailable: false,
+      discoveryMessage: 'Auto-discovery is starting.',
       protocolVersion: PROTOCOL_VERSION
     };
+
+    try {
+      bonjour = new Bonjour({}, markDiscoveryUnavailable);
+      advertisement = bonjour.publish({
+        name: serviceName,
+        type: SERVICE_TYPE,
+        port,
+        txt: {
+          app: 'iCloudFriend',
+          version: String(PROTOCOL_VERSION),
+          tls: '1.3',
+          fingerprint: credentials.fingerprint
+        }
+      });
+      if (typeof advertisement.on === 'function') {
+        advertisement.on('error', markDiscoveryUnavailable);
+      }
+      status.discoveryAvailable = true;
+      status.discoveryMessage = null;
+    } catch (error) {
+      markDiscoveryUnavailable(error);
+    }
+
     return status;
   }
 
   async function stop() {
-    if (advertisement) {
-      advertisement.stop();
-      advertisement = null;
-    }
-    if (bonjour) {
-      bonjour.destroy();
-      bonjour = null;
-    }
+    stopBonjour();
     if (server) {
       await new Promise((resolve) => server.close(resolve));
       server = null;
@@ -90,8 +98,39 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       serviceName: null,
       fingerprint: null,
       baseUrl: null,
+      discoveryAvailable: false,
+      discoveryMessage: null,
       protocolVersion: PROTOCOL_VERSION
     };
+  }
+
+  function markDiscoveryUnavailable(error) {
+    const message = error?.message || String(error || 'Bonjour auto-discovery is unavailable.');
+    status = {
+      ...status,
+      discoveryAvailable: false,
+      discoveryMessage: `Bonjour auto-discovery unavailable: ${message}`
+    };
+    stopBonjour();
+  }
+
+  function stopBonjour() {
+    if (advertisement) {
+      try {
+        advertisement.stop();
+      } catch {
+        // Discovery is best-effort; failed cleanup should not stop the receiver.
+      }
+      advertisement = null;
+    }
+    if (bonjour) {
+      try {
+        bonjour.destroy();
+      } catch {
+        // Discovery is best-effort; failed cleanup should not stop the receiver.
+      }
+      bonjour = null;
+    }
   }
 
   function getStatus() {
@@ -246,7 +285,8 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
   return {
     start,
     stop,
-    status: getStatus
+    status: getStatus,
+    markDiscoveryUnavailable
   };
 }
 
@@ -262,7 +302,7 @@ async function loadOrCreateCertificate(certDirectory) {
     ]);
     return { key, cert, fingerprint: certificateFingerprint(cert) };
   } catch {
-    const attrs = [{ name: 'commonName', value: `${os.hostname()}.local` }];
+    const attrs = [{ name: 'commonName', value: localHostname() }];
     const pem = await selfsigned.generate(attrs, {
       days: 3650,
       keySize: 2048,
@@ -274,8 +314,8 @@ async function loadOrCreateCertificate(certDirectory) {
         {
           name: 'subjectAltName',
           altNames: [
-            { type: 2, value: `${os.hostname()}.local` },
-            { type: 2, value: os.hostname() },
+            { type: 2, value: localHostname() },
+            { type: 2, value: cleanHostname() },
             { type: 7, ip: '127.0.0.1' }
           ]
         }
@@ -287,6 +327,15 @@ async function loadOrCreateCertificate(certDirectory) {
     ]);
     return { key: pem.private, cert: pem.cert, fingerprint: certificateFingerprint(pem.cert) };
   }
+}
+
+function cleanHostname() {
+  return os.hostname().replace(/\.local$/i, '');
+}
+
+function localHostname() {
+  const hostname = os.hostname();
+  return hostname.endsWith('.local') ? hostname : `${hostname}.local`;
 }
 
 function certificateFingerprint(cert) {

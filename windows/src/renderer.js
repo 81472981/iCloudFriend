@@ -32,6 +32,9 @@ async function boot() {
   currentSettings = await api.getSettings();
   renderSettings(currentSettings);
   await refreshAll();
+  setInterval(() => {
+    refreshReceiver().catch((error) => showToast(error.message || String(error)));
+  }, 5000);
   api.onBackupUpdate((stats) => renderStats(stats));
 }
 
@@ -75,7 +78,7 @@ function bindEvents() {
 }
 
 async function refreshAll() {
-  await Promise.all([refreshStats(), refreshShare()]);
+  await Promise.all([refreshStats(), refreshShare(), refreshReceiver()]);
 }
 
 async function refreshStats() {
@@ -87,6 +90,12 @@ async function refreshStats() {
 async function refreshShare() {
   const status = await api.getShareStatus();
   renderShareStatus(status);
+}
+
+async function refreshReceiver() {
+  const receiver = await api.getReceiverStatus();
+  currentSettings = { ...currentSettings, receiver };
+  renderReceiver(receiver);
 }
 
 function renderSettings(settings) {
@@ -112,16 +121,25 @@ function renderShareStatus(status) {
 }
 
 function renderReceiver(receiver) {
+  elements.receiverState.classList.remove('warning', 'offline');
+
   if (!receiver?.running) {
     elements.receiverUrl.textContent = 'Receiver offline';
     elements.receiverState.textContent = 'Offline';
+    elements.receiverState.classList.add('offline');
     elements.receiverFingerprint.textContent = '';
     return;
   }
 
   elements.receiverUrl.textContent = receiver.baseUrl || `Port ${receiver.port}`;
-  elements.receiverState.textContent = 'TLS online';
-  elements.receiverFingerprint.textContent = `Certificate SHA-256: ${shortFingerprint(receiver.fingerprint)}`;
+  elements.receiverState.textContent = receiver.discoveryAvailable === false ? 'Discovery limited' : 'TLS online';
+  elements.receiverState.classList.toggle('warning', receiver.discoveryAvailable === false);
+
+  const details = [`Certificate SHA-256: ${shortFingerprint(receiver.fingerprint)}`];
+  if (receiver.discoveryAvailable === false && receiver.discoveryMessage) {
+    details.push(receiver.discoveryMessage);
+  }
+  elements.receiverFingerprint.textContent = details.join(' | ');
 }
 
 function renderStats(stats) {

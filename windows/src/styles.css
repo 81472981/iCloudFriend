@@ -8,6 +8,7 @@
   --blue: #0f7fd1;
   --green: #13a36b;
   --teal: #0f9aa8;
+  --warning: #b42318;
   --bg-a: #eaf8fb;
   --bg-b: #effaf3;
   --shadow: 0 20px 50px rgba(11, 35, 43, 0.14);
@@ -90,6 +91,16 @@ button {
 .status-dot {
   color: var(--green);
   background: rgba(19, 163, 107, 0.12);
+}
+
+.status-dot.warning {
+  color: var(--warning);
+  background: rgba(180, 35, 24, 0.10);
+}
+
+.status-dot.offline {
+  color: var(--muted);
+  background: rgba(91, 111, 119, 0.12);
 }
 
 .eyebrow,

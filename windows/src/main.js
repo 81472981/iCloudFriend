@@ -16,6 +16,20 @@ let receiverServer;
 const DEFAULT_SHARE_NAME = 'iCloudFriend';
 const IOS_TARGET_FOLDER = 'Backup';
 
+process.on('uncaughtException', (error) => {
+  if (handleRecoverableMdnsError(error)) {
+    return;
+  }
+  reportFatalError(error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (handleRecoverableMdnsError(reason)) {
+    return;
+  }
+  reportFatalError(reason);
+});
+
 function defaultSettings() {
   return {
     backupRoot: path.join(app.getPath('pictures'), 'iCloudFriend Backups'),
@@ -64,6 +78,9 @@ function settingsWithConnection() {
 }
 
 function backupTargetRoot() {
+  if (path.basename(settings.backupRoot).toLowerCase() === IOS_TARGET_FOLDER.toLowerCase()) {
+    return settings.backupRoot;
+  }
   return path.join(settings.backupRoot, IOS_TARGET_FOLDER);
 }
 
@@ -332,6 +349,45 @@ function runPowerShellEncoded(script) {
 
 function psQuote(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function handleRecoverableMdnsError(reason) {
+  if (!isMdnsNetworkError(reason)) {
+    return false;
+  }
+
+  const message = reason?.message || String(reason);
+  console.warn(`Bonjour auto-discovery unavailable: ${message}`);
+  receiverServer?.markDiscoveryUnavailable?.(reason);
+  return true;
+}
+
+function isMdnsNetworkError(reason) {
+  if (!reason || typeof reason !== 'object') {
+    return false;
+  }
+
+  const code = reason.code;
+  const message = String(reason.message || reason);
+  const address = String(reason.address || '');
+  const port = Number(reason.port || 0);
+  const recoverableCodes = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'EADDRNOTAVAIL']);
+  const isMdnsTarget = port === 5353
+    || address === '224.0.0.251'
+    || message.includes('224.0.0.251:5353')
+    || message.includes('ff02::fb')
+    || message.includes(':5353');
+
+  return recoverableCodes.has(code) && isMdnsTarget;
+}
+
+function reportFatalError(reason) {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(error);
+  if (app.isReady()) {
+    dialog.showErrorBox('iCloudFriend error', error.stack || error.message);
+  }
+  app.exit(1);
 }
 
 module.exports = {
