@@ -112,7 +112,7 @@ struct ContentView: View {
                 .font(.subheadline.weight(.semibold))
 
             HStack(spacing: 10) {
-                TextField("https://电脑地址:端口", text: $manualAddress)
+                TextField("http://电脑地址:端口", text: $manualAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -391,7 +391,7 @@ struct ContentView: View {
                  .serverCertificateHasBadDate,
                  .serverCertificateHasUnknownRoot,
                  .serverCertificateNotYetValid:
-                return "TLS 连接失败，请在 Windows 端复制最新连接地址后重试。"
+                return "TLS 连接失败。当前开发环境请优先使用 Windows 端显示的 http 地址。"
             case .cannotConnectToHost, .cannotFindHost, .timedOut, .networkConnectionLost, .notConnectedToInternet:
                 return "无法连接 Windows 端，请确认两端在同一网络且 Windows 程序已打开。"
             default:

@@ -106,7 +106,11 @@ function primaryReceiverUrl() {
   if (!currentReceiver?.running) {
     return '';
   }
-  return currentReceiver.networkUrls?.[0] || currentReceiver.baseUrl || `端口 ${currentReceiver.port}`;
+  return currentReceiver.httpNetworkUrls?.[0]
+    || currentReceiver.httpBaseUrl
+    || currentReceiver.networkUrls?.[0]
+    || currentReceiver.baseUrl
+    || `端口 ${currentReceiver.httpPort || currentReceiver.port}`;
 }
 
 function renderCounts() {

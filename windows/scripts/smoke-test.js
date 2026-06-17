@@ -1,6 +1,7 @@
 const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs/promises');
+const http = require('http');
 const https = require('https');
 const os = require('os');
 const path = require('path');
@@ -48,8 +49,11 @@ async function testReceiverServer() {
 
   try {
     await receiver.start();
-    const base = `https://127.0.0.1:${receiver.status().port}`;
+    const base = `http://127.0.0.1:${receiver.status().httpPort}`;
+    const secureBase = `https://127.0.0.1:${receiver.status().port}`;
     assert.ok(Array.isArray(receiver.status().networkUrls));
+    assert.ok(Array.isArray(receiver.status().httpNetworkUrls));
+    assert.ok(receiver.status().httpPort > 0);
     const cert = await fs.readFile(path.join(root, 'cert', 'receiver.cert.pem'), 'utf8');
     assert.match(new crypto.X509Certificate(cert).subjectAltName, /IP Address:127\.0\.0\.1/);
 
@@ -60,6 +64,8 @@ async function testReceiverServer() {
     assert.equal(hello.app, 'iCloudFriend');
     assert.equal(receiver.status().client.deviceName, 'Smoke iPhone');
     assert.equal(receiver.status().client.deviceIdentifier, 'smoke-device');
+    const secureHello = await requestJson('GET', `${secureBase}/api/hello`);
+    assert.equal(secureHello.app, 'iCloudFriend');
 
     receiver.markDiscoveryUnavailable(Object.assign(new Error('send EHOSTUNREACH 224.0.0.251:5353'), {
       code: 'EHOSTUNREACH',
@@ -154,9 +160,10 @@ function requestJson(method, url, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const isJson = body && !Buffer.isBuffer(body) && typeof body !== 'string';
     const data = body ? Buffer.from(isJson ? JSON.stringify(body) : body) : null;
-    const request = https.request(url, {
+    const transport = url.startsWith('https:') ? https : http;
+    const request = transport.request(url, {
       method,
-      rejectUnauthorized: false,
+      ...(url.startsWith('https:') ? { rejectUnauthorized: false } : {}),
       headers: {
         ...(isJson ? { 'content-type': 'application/json' } : {}),
         ...(data ? { 'content-length': data.length } : {}),

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const legacyFs = require('fs');
+const http = require('http');
 const https = require('https');
 const os = require('os');
 const path = require('path');
@@ -13,15 +14,19 @@ const PROTOCOL_VERSION = 1;
 
 function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
   let server = null;
+  let plainServer = null;
   let bonjour = null;
   let advertisement = null;
   let status = {
     running: false,
     port: null,
+    httpPort: null,
     serviceName: null,
     fingerprint: null,
     baseUrl: null,
+    httpBaseUrl: null,
     networkUrls: [],
+    httpNetworkUrls: [],
     discoveryAvailable: false,
     discoveryMessage: null,
     client: null,
@@ -40,26 +45,26 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       cert: credentials.cert,
       minVersion: 'TLSv1.3'
     }, handleRequest);
+    plainServer = http.createServer(handleRequest);
 
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '0.0.0.0', () => {
-        server.off('error', reject);
-        resolve();
-      });
-    });
+    await listen(server);
+    await listen(plainServer);
 
     const port = server.address().port;
+    const httpPort = plainServer.address().port;
     const hostname = cleanHostname();
     const localName = localHostname();
     const serviceName = `iCloudFriend ${hostname}`;
     status = {
       running: true,
       port,
+      httpPort,
       serviceName,
       fingerprint: credentials.fingerprint,
       baseUrl: `https://${localName}:${port}`,
+      httpBaseUrl: `http://${localName}:${httpPort}`,
       networkUrls: localNetworkUrls(port),
+      httpNetworkUrls: localNetworkUrls(httpPort, 'http'),
       discoveryAvailable: false,
       discoveryMessage: 'Auto-discovery is starting.',
       client: null,
@@ -77,6 +82,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
           app: 'iCloudFriend',
           version: String(PROTOCOL_VERSION),
           tls: '1.3',
+          httpPort: String(httpPort),
           fingerprint: credentials.fingerprint
         }
       });
@@ -98,13 +104,20 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       await new Promise((resolve) => server.close(resolve));
       server = null;
     }
+    if (plainServer) {
+      await new Promise((resolve) => plainServer.close(resolve));
+      plainServer = null;
+    }
     status = {
       running: false,
       port: null,
+      httpPort: null,
       serviceName: null,
       fingerprint: null,
       baseUrl: null,
+      httpBaseUrl: null,
       networkUrls: [],
+      httpNetworkUrls: [],
       discoveryAvailable: false,
       discoveryMessage: null,
       client: null,
@@ -146,13 +159,14 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     return {
       ...status,
       networkUrls: status.port ? localNetworkUrls(status.port) : [],
+      httpNetworkUrls: status.httpPort ? localNetworkUrls(status.httpPort, 'http') : [],
       backupRoot: getBackupRoot()
     };
   }
 
   async function handleRequest(request, response) {
     try {
-      const requestUrl = new URL(request.url, 'https://localhost');
+      const requestUrl = new URL(request.url, 'http://localhost');
 
       if (request.method === 'GET' && requestUrl.pathname === '/api/hello') {
         markClientConnected(request);
@@ -348,6 +362,16 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
   };
 }
 
+function listen(targetServer) {
+  return new Promise((resolve, reject) => {
+    targetServer.once('error', reject);
+    targetServer.listen(0, '0.0.0.0', () => {
+      targetServer.off('error', reject);
+      resolve();
+    });
+  });
+}
+
 async function loadOrCreateCertificate(certDirectory) {
   await fs.mkdir(certDirectory, { recursive: true });
   const keyPath = path.join(certDirectory, 'receiver.key.pem');
@@ -396,9 +420,9 @@ function localHostname() {
   return hostname.endsWith('.local') ? hostname : `${hostname}.local`;
 }
 
-function localNetworkUrls(port) {
+function localNetworkUrls(port, scheme = 'https') {
   return localNetworkCandidates()
-    .map((candidate) => `https://${candidate.address}:${port}`);
+    .map((candidate) => `${scheme}://${candidate.address}:${port}`);
 }
 
 function localIPv4Addresses() {

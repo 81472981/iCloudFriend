@@ -90,13 +90,14 @@ struct BackupProgress: Equatable {
 struct ReceiverDevice: Identifiable, Equatable {
     let id: String
     let name: String
+    let scheme: String
     let hostName: String
     let port: Int
     let fingerprint: String?
     let protocolVersion: Int
 
     var baseURL: URL {
-        URL(string: "https://\(hostName):\(port)")!
+        URL(string: "\(scheme)://\(hostName):\(port)")!
     }
 
     var displayName: String {
