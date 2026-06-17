@@ -76,7 +76,7 @@ extension ReceiverDiscovery: NetServiceDelegate {
                 self.devices.append(device)
             }
 
-            if self.selectedDevice == nil {
+            if self.selectedDevice?.id == device.id {
                 self.selectedDevice = device
             }
         }
