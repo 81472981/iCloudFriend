@@ -23,10 +23,6 @@ enum PhotoLibraryAccess {
         let options = PHFetchOptions()
         options.includeHiddenAssets = true
         options.includeAllBurstAssets = true
-        options.sortDescriptors = [
-            NSSortDescriptor(key: "creationDate", ascending: true),
-            NSSortDescriptor(key: "localIdentifier", ascending: true)
-        ]
 
         let result = PHAsset.fetchAssets(with: options)
         var assets: [PHAsset] = []
@@ -34,6 +30,17 @@ enum PhotoLibraryAccess {
         result.enumerateObjects { asset, _, _ in
             assets.append(asset)
         }
-        return assets
+        return assets.sorted { left, right in
+            switch (left.creationDate, right.creationDate) {
+            case let (leftDate?, rightDate?) where leftDate != rightDate:
+                return leftDate < rightDate
+            case (nil, _?):
+                return false
+            case (_?, nil):
+                return true
+            default:
+                return left.localIdentifier < right.localIdentifier
+            }
+        }
     }
 }
