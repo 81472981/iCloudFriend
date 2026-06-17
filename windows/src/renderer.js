@@ -12,6 +12,7 @@ const elements = {
   toast: document.getElementById('toast'),
   chooseFolderButton: document.getElementById('chooseFolderButton'),
   openFolderButton: document.getElementById('openFolderButton'),
+  copyReceiverButton: document.getElementById('copyReceiverButton'),
   refreshButton: document.getElementById('refreshButton')
 };
 
@@ -51,6 +52,16 @@ function bindEvents() {
     }
   });
 
+  elements.copyReceiverButton.addEventListener('click', async () => {
+    const url = primaryReceiverUrl();
+    if (!url) {
+      showToast('接收服务还没有启动。');
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    showToast('连接地址已复制。');
+  });
+
   elements.refreshButton.addEventListener('click', refreshAll);
 }
 
@@ -81,13 +92,19 @@ function renderDevice() {
   const sync = latestSyncStatus();
 
   elements.deviceName.textContent = sync?.deviceName || '等待 iOS 连接';
-  elements.receiverState.textContent = currentReceiver?.running
-    ? currentReceiver.baseUrl || `端口 ${currentReceiver.port}`
-    : '未启动';
+  elements.receiverState.textContent = currentReceiver?.running ? primaryReceiverUrl() : '未启动';
+  elements.copyReceiverButton.disabled = !currentReceiver?.running || !primaryReceiverUrl();
 
   const state = connectionState(sync);
   elements.connectionState.textContent = state.label;
   elements.connectionState.className = `state-pill ${state.tone}`;
+}
+
+function primaryReceiverUrl() {
+  if (!currentReceiver?.running) {
+    return '';
+  }
+  return currentReceiver.networkUrls?.[0] || currentReceiver.baseUrl || `端口 ${currentReceiver.port}`;
 }
 
 function renderCounts() {

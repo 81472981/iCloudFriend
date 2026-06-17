@@ -48,6 +48,7 @@ async function testReceiverServer() {
   try {
     await receiver.start();
     const base = `https://127.0.0.1:${receiver.status().port}`;
+    assert.ok(Array.isArray(receiver.status().networkUrls));
     const hello = await requestJson('GET', `${base}/api/hello`);
     assert.equal(hello.app, 'iCloudFriend');
 

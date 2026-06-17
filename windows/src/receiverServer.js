@@ -21,6 +21,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     serviceName: null,
     fingerprint: null,
     baseUrl: null,
+    networkUrls: [],
     discoveryAvailable: false,
     discoveryMessage: null,
     sync: null,
@@ -57,6 +58,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       serviceName,
       fingerprint: credentials.fingerprint,
       baseUrl: `https://${localName}:${port}`,
+      networkUrls: localNetworkUrls(port),
       discoveryAvailable: false,
       discoveryMessage: 'Auto-discovery is starting.',
       sync: null,
@@ -100,6 +102,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       serviceName: null,
       fingerprint: null,
       baseUrl: null,
+      networkUrls: [],
       discoveryAvailable: false,
       discoveryMessage: null,
       sync: null,
@@ -139,6 +142,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
   function getStatus() {
     return {
       ...status,
+      networkUrls: status.port ? localNetworkUrls(status.port) : [],
       backupRoot: getBackupRoot()
     };
   }
@@ -371,6 +375,62 @@ function cleanHostname() {
 function localHostname() {
   const hostname = os.hostname();
   return hostname.endsWith('.local') ? hostname : `${hostname}.local`;
+}
+
+function localNetworkUrls(port) {
+  const interfaces = os.networkInterfaces();
+  const candidates = [];
+
+  for (const [name, entries] of Object.entries(interfaces)) {
+    for (const entry of entries || []) {
+      if (entry.family !== 'IPv4' || entry.internal || !entry.address) {
+        continue;
+      }
+      candidates.push({
+        address: entry.address,
+        url: `https://${entry.address}:${port}`,
+        interfaceRank: virtualInterfaceRank(name, entry),
+        networkRank: privateNetworkRank(entry.address)
+      });
+    }
+  }
+
+  return candidates
+    .sort((left, right) => {
+      return left.interfaceRank - right.interfaceRank
+        || left.networkRank - right.networkRank
+        || left.address.localeCompare(right.address);
+    })
+    .filter((candidate, index, list) => list.findIndex((item) => item.address === candidate.address) === index)
+    .map((candidate) => candidate.url);
+}
+
+function virtualInterfaceRank(name, entry) {
+  const text = String(name || '').toLowerCase();
+  const mac = String(entry.mac || '').toLowerCase();
+  if (/^(lo|utun|awdl|llw|bridge|gif|stf|p2p|tun|tap|wg|vmnet|vbox|docker|br-|anpi)/.test(text)) {
+    return 10;
+  }
+  if (text.includes('virtual') || text.includes('vmware') || text.includes('hyper-v') || text.includes('vethernet')) {
+    return 10;
+  }
+  if (mac === '00:00:00:00:00:00') {
+    return 10;
+  }
+  return 0;
+}
+
+function privateNetworkRank(address) {
+  if (address.startsWith('192.168.')) {
+    return 0;
+  }
+  if (address.startsWith('10.')) {
+    return 1;
+  }
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(address)) {
+    return 2;
+  }
+  return 3;
 }
 
 function certificateFingerprint(cert) {

@@ -178,6 +178,14 @@ button {
   white-space: nowrap;
 }
 
+.address-line {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .state-pill {
   justify-self: start;
   display: inline-flex;
@@ -237,6 +245,11 @@ button {
   color: #0d405f;
   background: #ffffff;
   border: 1px solid var(--line);
+}
+
+.button.small {
+  padding: 7px 10px;
+  font-size: 12px;
 }
 
 .toast {
