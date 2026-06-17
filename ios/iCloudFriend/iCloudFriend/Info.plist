@@ -28,6 +28,8 @@
 	<string>iCloudFriend uses the local network to discover and connect to your Windows backup receiver.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

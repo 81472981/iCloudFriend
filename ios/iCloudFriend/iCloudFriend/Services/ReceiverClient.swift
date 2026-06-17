@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import UIKit
 
 private struct AssetStatusRequest: Encodable {
@@ -48,7 +49,7 @@ private struct BasicResponse: Decodable {
     let ok: Bool?
 }
 
-final class ReceiverClient: NSObject, URLSessionDelegate {
+final class ReceiverClient: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     private let device: ReceiverDevice
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -179,12 +180,29 @@ final class ReceiverClient: NSObject, URLSessionDelegate {
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
+        completeAuthenticationChallenge(challenge, completionHandler: completionHandler)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        completeAuthenticationChallenge(challenge, completionHandler: completionHandler)
+    }
+
+    private func completeAuthenticationChallenge(
+        _ challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
               let trust = challenge.protectionSpace.serverTrust else {
             completionHandler(.performDefaultHandling, nil)
             return
         }
 
+        SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, challenge.protectionSpace.host as CFString))
         completionHandler(.useCredential, URLCredential(trust: trust))
     }
 

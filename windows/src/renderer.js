@@ -93,7 +93,7 @@ function renderDevice() {
   const client = currentReceiver?.client || null;
   const clientIsLatest = client && (!sync || isNewer(client.connectedAt, sync.updatedAt));
 
-  elements.deviceName.textContent = (clientIsLatest ? client.deviceName : sync?.deviceName) || client?.deviceName || '等待 iOS 连接';
+  elements.deviceName.textContent = (clientIsLatest ? client.deviceName : sync?.deviceName) || client?.deviceName || '暂无设备';
   elements.receiverState.textContent = currentReceiver?.running ? primaryReceiverUrl() : '未启动';
   elements.copyReceiverButton.disabled = !currentReceiver?.running || !primaryReceiverUrl();
 
@@ -128,7 +128,7 @@ function renderCounts() {
   } else if (backedUp > 0) {
     elements.backupHint.textContent = `已备份 ${formatNumber(backedUp)} 张，等待 iOS 上报相册总数量。`;
   } else {
-    elements.backupHint.textContent = '等待 iOS 设备连接并开始备份。';
+    elements.backupHint.textContent = '等待 iPhone 连接并开始备份。';
   }
 }
 
@@ -146,7 +146,7 @@ function connectionState(sync, client, clientIsLatest) {
   }
 
   if (!sync) {
-    return { label: '等待连接', tone: 'waiting' };
+    return { label: '未连接', tone: 'waiting' };
   }
 
   if (sync.runStatus === 'running') {
