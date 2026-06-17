@@ -81,7 +81,9 @@ function renderDevice() {
   const sync = latestSyncStatus();
 
   elements.deviceName.textContent = sync?.deviceName || '等待 iOS 连接';
-  elements.receiverState.textContent = currentReceiver?.running ? '已启动' : '未启动';
+  elements.receiverState.textContent = currentReceiver?.running
+    ? currentReceiver.baseUrl || `端口 ${currentReceiver.port}`
+    : '未启动';
 
   const state = connectionState(sync);
   elements.connectionState.textContent = state.label;
