@@ -5,6 +5,8 @@ struct ContentView: View {
     @ObservedObject var backupManager: BackupManager
 
     @State private var selectedMode: BackupMode = .incremental
+    @State private var manualAddress = ""
+    @State private var manualAddressError: String?
 
     private let orange = Color(red: 1.0, green: 0.58, blue: 0.08)
     private let red = Color(red: 1.0, green: 0.22, blue: 0.20)
@@ -77,6 +79,8 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, minHeight: 220, alignment: .top)
                 .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
+                manualAddressBox
+
                 Spacer()
 
                 Button {
@@ -96,6 +100,50 @@ struct ContentView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
+        }
+    }
+
+    private var manualAddressBox: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("手动连接")
+                .font(.subheadline.weight(.semibold))
+
+            HStack(spacing: 10) {
+                TextField("https://电脑地址:端口", text: $manualAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .font(.subheadline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 11)
+                    .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Button("连接") {
+                    connectManualAddress()
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .background(red, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+            if let manualAddressError {
+                Text(manualAddressError)
+                    .font(.caption)
+                    .foregroundStyle(.white)
+            }
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func connectManualAddress() {
+        do {
+            try receiverDiscovery.selectManualAddress(manualAddress)
+            manualAddressError = nil
+        } catch {
+            manualAddressError = error.localizedDescription
         }
     }
 

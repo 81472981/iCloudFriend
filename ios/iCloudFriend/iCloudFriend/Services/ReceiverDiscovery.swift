@@ -37,6 +37,43 @@ final class ReceiverDiscovery: NSObject, ObservableObject {
     func select(_ device: ReceiverDevice) {
         selectedDevice = device
     }
+
+    func selectManualAddress(_ value: String) throws {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = text.contains("://") ? text : "https://\(text)"
+        guard let components = URLComponents(string: normalized),
+              components.scheme == "https",
+              let host = components.host,
+              let port = components.port,
+              port > 0 else {
+            throw ReceiverDiscoveryError.invalidManualAddress
+        }
+
+        let device = ReceiverDevice(
+            id: "manual-\(host)-\(port)",
+            name: "iCloudFriend \(host)",
+            hostName: host,
+            port: port,
+            fingerprint: nil,
+            protocolVersion: 1
+        )
+
+        if !devices.contains(where: { $0.id == device.id }) {
+            devices.append(device)
+        }
+        selectedDevice = device
+    }
+}
+
+enum ReceiverDiscoveryError: LocalizedError {
+    case invalidManualAddress
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidManualAddress:
+            return "请输入 Windows 端显示的 https 地址，例如 https://192.168.1.10:50000。"
+        }
+    }
 }
 
 extension ReceiverDiscovery: NetServiceBrowserDelegate {
