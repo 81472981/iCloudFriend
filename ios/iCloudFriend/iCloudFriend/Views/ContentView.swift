@@ -141,6 +141,9 @@ struct ContentView: View {
         }
         .padding(14)
         .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onChange(of: manualAddress) { _, _ in
+            manualAddressError = nil
+        }
     }
 
     private func connect(_ device: ReceiverDevice) {

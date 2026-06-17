@@ -54,6 +54,7 @@ async function testReceiverServer() {
     assert.ok(Array.isArray(receiver.status().networkUrls));
     assert.ok(Array.isArray(receiver.status().httpNetworkUrls));
     assert.ok(receiver.status().httpPort > 0);
+    assert.equal(receiver.status().loopbackHttpUrl, base);
     const cert = await fs.readFile(path.join(root, 'cert', 'receiver.cert.pem'), 'utf8');
     assert.match(new crypto.X509Certificate(cert).subjectAltName, /IP Address:127\.0\.0\.1/);
 

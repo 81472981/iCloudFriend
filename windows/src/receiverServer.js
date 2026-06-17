@@ -25,6 +25,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     fingerprint: null,
     baseUrl: null,
     httpBaseUrl: null,
+    loopbackHttpUrl: null,
     networkUrls: [],
     httpNetworkUrls: [],
     discoveryAvailable: false,
@@ -63,6 +64,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       fingerprint: credentials.fingerprint,
       baseUrl: `https://${localName}:${port}`,
       httpBaseUrl: `http://${localName}:${httpPort}`,
+      loopbackHttpUrl: `http://127.0.0.1:${httpPort}`,
       networkUrls: localNetworkUrls(port),
       httpNetworkUrls: localNetworkUrls(httpPort, 'http'),
       discoveryAvailable: false,
@@ -116,6 +118,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       fingerprint: null,
       baseUrl: null,
       httpBaseUrl: null,
+      loopbackHttpUrl: null,
       networkUrls: [],
       httpNetworkUrls: [],
       discoveryAvailable: false,
@@ -160,6 +163,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       ...status,
       networkUrls: status.port ? localNetworkUrls(status.port) : [],
       httpNetworkUrls: status.httpPort ? localNetworkUrls(status.httpPort, 'http') : [],
+      loopbackHttpUrl: status.httpPort ? `http://127.0.0.1:${status.httpPort}` : null,
       backupRoot: getBackupRoot()
     };
   }

@@ -106,6 +106,9 @@ function primaryReceiverUrl() {
   if (!currentReceiver?.running) {
     return '';
   }
+  if (currentSettings?.platform === 'darwin' && currentReceiver.loopbackHttpUrl) {
+    return currentReceiver.loopbackHttpUrl;
+  }
   return currentReceiver.httpNetworkUrls?.[0]
     || currentReceiver.httpBaseUrl
     || currentReceiver.networkUrls?.[0]
