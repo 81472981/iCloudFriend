@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>iCloudFriend needs access to back up your original photos, videos, and metadata to your Windows receiver.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>iCloudFriend may save exported test photos and backup helper files to your photo library during development.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>iCloudFriend uses the local network to discover and connect to your Windows backup receiver.</string>
 	<key>NSAppTransportSecurity</key>

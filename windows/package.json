@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/backupIndex.js && node --check src/receiverServer.js && node --check scripts/smoke-test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/backupIndex.js && node --check src/receiverServer.js && node --check src/photoPreview.js && node --check src/visibleBackup.js && node --check scripts/smoke-test.js",
     "smoke": "node scripts/smoke-test.js",
     "dist:win": "electron-builder --win portable nsis --x64"
   },

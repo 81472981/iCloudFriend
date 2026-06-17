@@ -63,7 +63,8 @@ final class BackupManager: ObservableObject {
             progress.status = .running
             progress.totalAssets = assets.count
             progress.appendLog("Found \(assets.count) library assets")
-            await reportSyncStatus(client: client, mode: mode, runStatus: "running")
+            let libraryDiagnostic = assets.isEmpty ? PhotoLibraryAccess.lastDiagnosticSummary : nil
+            await reportSyncStatus(client: client, mode: mode, runStatus: "running", message: libraryDiagnostic)
 
             let tempBackupRoot = try makeTemporaryBackupRoot()
             defer {
@@ -86,7 +87,7 @@ final class BackupManager: ObservableObject {
                 progress.currentResourceName = ""
                 progress.resourceProgress = 1
                 progress.appendLog("Done: \(progress.completedAssets) assets, \(progress.failedAssets) failed")
-                await reportSyncStatus(client: client, mode: mode, runStatus: "finished")
+                await reportSyncStatus(client: client, mode: mode, runStatus: "finished", message: libraryDiagnostic)
             }
         } catch is CancellationError {
             progress.status = .cancelled

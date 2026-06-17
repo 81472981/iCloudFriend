@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('iCloudFriend', {
   chooseFolder: () => ipcRenderer.invoke('dialog:choose-folder'),
   openFolder: () => ipcRenderer.invoke('folder:open'),
   scanBackup: () => ipcRenderer.invoke('backup:scan'),
+  listPhotos: () => ipcRenderer.invoke('photos:list'),
+  openPhoto: (filePath) => ipcRenderer.invoke('photo:open', filePath),
   getShareStatus: () => ipcRenderer.invoke('share:status'),
   createShare: () => ipcRenderer.invoke('share:create'),
   getReceiverStatus: () => ipcRenderer.invoke('receiver:status'),

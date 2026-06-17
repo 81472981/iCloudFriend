@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require('electron');
 const fs = require('fs/promises');
 const legacyFs = require('fs');
 const os = require('os');
@@ -6,6 +6,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { pathExists, scanBackupRoot } = require('./backupIndex');
 const { createReceiverServer } = require('./receiverServer');
+const { listPreviewPhotos } = require('./photoPreview');
+const { VISIBLE_PHOTOS_DIR, mirrorExistingBackups } = require('./visibleBackup');
 
 let mainWindow;
 let settings;
@@ -61,6 +63,7 @@ async function writeSettings(nextSettings) {
   await fs.mkdir(app.getPath('userData'), { recursive: true });
   await fs.writeFile(configPath(), JSON.stringify(settings, null, 2));
   await ensureBackupFolders();
+  await mirrorBackupsToVisibleFolder();
   restartWatcher();
   return settingsWithConnection();
 }
@@ -73,6 +76,7 @@ function settingsWithConnection() {
     ...settings,
     hostname,
     backupTargetRoot: backupTargetRoot(),
+    visiblePhotosRoot: path.join(backupTargetRoot(), VISIBLE_PHOTOS_DIR),
     targetFolderName: IOS_TARGET_FOLDER,
     smbUrl: `smb://${hostname}/${shareName}`,
     smbTargetUrl: `smb://${hostname}/${shareName}/${encodedTarget}`,
@@ -112,14 +116,15 @@ function normalizeBackupRootPath(value) {
 async function ensureBackupFolders() {
   await fs.mkdir(settings.backupRoot, { recursive: true });
   await fs.mkdir(backupTargetRoot(), { recursive: true });
+  await fs.mkdir(path.join(backupTargetRoot(), VISIBLE_PHOTOS_DIR), { recursive: true });
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 980,
-    height: 620,
+    height: 760,
     minWidth: 780,
-    minHeight: 560,
+    minHeight: 640,
     title: 'iCloudFriend',
     backgroundColor: '#071620',
     webPreferences: {
@@ -135,8 +140,10 @@ function createWindow() {
 async function initialize() {
   settings = await readSettings();
   await ensureBackupFolders();
+  await mirrorBackupsToVisibleFolder();
   receiverServer = createReceiverServer({
     getBackupRoot: () => path.join(backupTargetRoot(), '.icloudfriend'),
+    getPublicBackupRoot: () => backupTargetRoot(),
     certDirectory: path.join(app.getPath('userData'), 'receiver-cert'),
     onChanged: scheduleScan
   });
@@ -194,6 +201,19 @@ ipcMain.handle('backup:scan', async () => {
   return stats;
 });
 
+ipcMain.handle('photos:list', async () => {
+  const photos = await listPreviewPhotos(backupTargetRoot());
+  return Promise.all(photos.map(async (photo) => ({
+    ...photo,
+    thumbnailDataUrl: await thumbnailDataUrl(photo.filePath)
+  })));
+});
+
+ipcMain.handle('photo:open', async (_event, filePath) => {
+  const target = assertInsideVisiblePhotos(filePath);
+  return shell.openPath(target);
+});
+
 ipcMain.handle('receiver:status', async () => receiverServer?.status() || null);
 
 ipcMain.handle('share:status', async () => {
@@ -245,6 +265,42 @@ function scheduleScan() {
     const stats = await scanBackupRoot(backupTargetRoot());
     mainWindow.webContents.send('backup:update', stats);
   }, 450);
+}
+
+async function mirrorBackupsToVisibleFolder() {
+  try {
+    await mirrorExistingBackups({
+      internalRoot: path.join(backupTargetRoot(), '.icloudfriend'),
+      publicRoot: backupTargetRoot()
+    });
+  } catch (error) {
+    console.warn(`Unable to prepare visible photo backups: ${error.message}`);
+  }
+}
+
+async function thumbnailDataUrl(filePath) {
+  try {
+    const target = assertInsideVisiblePhotos(filePath);
+    const thumbnail = await nativeImage.createThumbnailFromPath(target, {
+      width: 320,
+      height: 240
+    });
+    if (!thumbnail || thumbnail.isEmpty()) {
+      return null;
+    }
+    return thumbnail.toDataURL();
+  } catch {
+    return null;
+  }
+}
+
+function assertInsideVisiblePhotos(filePath) {
+  const root = path.resolve(backupTargetRoot(), VISIBLE_PHOTOS_DIR);
+  const target = path.resolve(String(filePath || ''));
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
+    throw new Error('Photo path is outside the backup preview folder.');
+  }
+  return target;
 }
 
 async function readShareStatus() {

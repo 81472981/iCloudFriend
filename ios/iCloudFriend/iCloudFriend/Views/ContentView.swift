@@ -10,9 +10,11 @@ struct ContentView: View {
     @State private var isManualConnecting = false
     @State private var connectingDeviceID: String?
 
-    private let orange = Color(red: 1.0, green: 0.58, blue: 0.08)
-    private let red = Color(red: 1.0, green: 0.22, blue: 0.20)
-    private let green = Color(red: 0.0, green: 0.68, blue: 0.12)
+    private let primaryBlue = Color(red: 0.08, green: 0.39, blue: 0.92)
+    private let deepBlue = Color(red: 0.02, green: 0.12, blue: 0.34)
+    private let skyBlue = Color(red: 0.22, green: 0.64, blue: 1.0)
+    private let cyanBlue = Color(red: 0.0, green: 0.76, blue: 0.95)
+    private let dangerRed = Color(red: 1.0, green: 0.22, blue: 0.20)
 
     var body: some View {
         ZStack {
@@ -30,7 +32,7 @@ struct ContentView: View {
     private var searchScreen: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 1.0, green: 0.70, blue: 0.18), orange, Color(red: 0.96, green: 0.35, blue: 0.05)],
+                colors: [skyBlue, primaryBlue, deepBlue],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -99,7 +101,7 @@ struct ContentView: View {
                         .padding(.vertical, 14)
                 }
                 .foregroundStyle(.white)
-                .background(red, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(primaryBlue, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
@@ -128,7 +130,7 @@ struct ContentView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
-                .background(red, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(primaryBlue, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .disabled(isManualConnecting)
             }
 
@@ -243,7 +245,7 @@ struct ContentView: View {
     private var syncScreen: some View {
         ZStack {
             LinearGradient(
-                colors: [Color.black, Color(red: 0.08, green: 0.10, blue: 0.11), Color(red: 0.02, green: 0.06, blue: 0.07)],
+                colors: [deepBlue, Color(red: 0.04, green: 0.18, blue: 0.42), Color(red: 0.0, green: 0.04, blue: 0.12)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -300,11 +302,11 @@ struct ContentView: View {
         VStack(spacing: 5) {
             Text("已连接")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.green)
+                .foregroundStyle(cyanBlue)
 
             Text(receiverDiscovery.selectedDevice?.displayName ?? "Windows 电脑")
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .foregroundStyle(orange)
+                .foregroundStyle(skyBlue)
                 .lineLimit(1)
 
             Text(receiverDiscovery.selectedDevice?.hostName ?? "")
@@ -316,19 +318,42 @@ struct ContentView: View {
     }
 
     private var progressSummary: some View {
-        VStack(spacing: 12) {
-            Text("\(backupManager.progress.completedAssets)")
-                .font(.system(size: 58, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(red)
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.12), lineWidth: 12)
 
-            Text(totalText)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.62))
+                Circle()
+                    .trim(from: 0, to: backupManager.progress.assetFraction)
+                    .stroke(
+                        AngularGradient(
+                            colors: [cyanBlue, skyBlue, cyanBlue],
+                            center: .center,
+                            startAngle: .degrees(-90),
+                            endAngle: .degrees(270)
+                        ),
+                        style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.22), value: backupManager.progress.assetFraction)
 
-            ProgressView(value: backupManager.progress.assetFraction)
-                .tint(red)
-                .frame(maxWidth: 220)
+                VStack(spacing: 8) {
+                    Text("\(backupManager.progress.completedAssets)")
+                        .font(.system(size: 56, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(skyBlue)
+
+                    Text(totalText)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+                .padding(.horizontal, 18)
+            }
+            .frame(width: 188, height: 188)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(totalText)
 
             Text(statusText)
                 .font(.caption)
@@ -351,7 +376,7 @@ struct ContentView: View {
                 .padding(.vertical, 14)
         }
         .foregroundStyle(.white)
-        .background(backupManager.isRunning ? red : green, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(backupManager.isRunning ? dangerRed : primaryBlue, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var totalText: String {

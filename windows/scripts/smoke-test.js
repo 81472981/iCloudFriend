@@ -6,6 +6,7 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 const { scanBackupRoot } = require('../src/backupIndex');
+const { listPreviewPhotos } = require('../src/photoPreview');
 const { createReceiverServer } = require('../src/receiverServer');
 
 async function main() {
@@ -34,15 +35,57 @@ async function main() {
   assert.equal(stats.totalBytes, 1024);
   assert.equal(stats.recent[0].firstFilename, 'IMG_0001.HEIC');
 
+  await testPhotoPreview();
   await testReceiverServer();
   console.log('Smoke test passed.');
 }
 
+async function testPhotoPreview() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'icloudfriend-preview-'));
+  try {
+    await writePreviewAsset(root, '2026/06/newer', 'NEWER.JPG', '2026-06-17T08:00:00Z');
+    await writePreviewAsset(root, '2024/01/older', 'OLDER.JPG', '2024-01-02T08:00:00Z');
+
+    const photos = await listPreviewPhotos(root);
+    assert.equal(photos.length, 2);
+    assert.equal(photos[0].filename, 'NEWER.JPG');
+    assert.equal(photos[1].filename, 'OLDER.JPG');
+    assert.match(photos[0].relativeFolder, /Photos/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
+async function writePreviewAsset(root, folder, filename, creationDate) {
+  const assetDir = path.join(root, 'Photos', folder);
+  await fs.mkdir(assetDir, { recursive: true });
+  await fs.writeFile(path.join(assetDir, filename), `preview-${filename}`);
+  await fs.writeFile(path.join(assetDir, 'metadata.json'), JSON.stringify({
+    formatVersion: 1,
+    backedUpAt: new Date().toISOString(),
+    asset: {
+      localIdentifier: filename,
+      mediaType: 'image',
+      creationDate
+    },
+    resources: [
+      {
+        storedFilename: filename,
+        originalFilename: filename,
+        resourceType: 'photo',
+        byteCount: 128
+      }
+    ]
+  }));
+}
+
 async function testReceiverServer() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'icloudfriend-receiver-'));
-  const backupRoot = path.join(root, 'Backup', '.icloudfriend');
+  const publicRoot = path.join(root, 'Backup');
+  const backupRoot = path.join(publicRoot, '.icloudfriend');
   const receiver = createReceiverServer({
     getBackupRoot: () => backupRoot,
+    getPublicBackupRoot: () => publicRoot,
     certDirectory: path.join(root, 'cert'),
     onChanged: () => {}
   });
@@ -139,11 +182,17 @@ async function testReceiverServer() {
       backedUpAt: new Date().toISOString()
     };
 
-    await requestJson('POST', `${base}/api/asset/commit`, {
+    const committed = await requestJson('POST', `${base}/api/asset/commit`, {
       assetFolder: 'assets/2026/06/test-asset',
       sidecar,
       event
     });
+    assert.equal(committed.visibleFolder, path.join('Photos', '2026', '06', 'test-asset'));
+
+    const visibleFile = path.join(publicRoot, 'Photos', '2026', '06', 'test-asset', 'IMG_0001.HEIC');
+    const visibleMetadata = path.join(publicRoot, 'Photos', '2026', '06', 'test-asset', 'metadata.json');
+    assert.equal(await fs.readFile(visibleFile, 'utf8'), payload.toString('utf8'));
+    assert.equal(JSON.parse(await fs.readFile(visibleMetadata, 'utf8')).asset.localIdentifier, 'receiver-asset');
 
     const stats = await scanBackupRoot(path.join(root, 'Backup'));
     assert.equal(stats.assetCount, 1);

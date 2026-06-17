@@ -179,7 +179,7 @@ enum BackupError: LocalizedError {
         case .noReceiver:
             return "Select a Windows receiver first. Keep both devices on the same Wi-Fi and the Windows app open."
         case .photosDenied:
-            return "Photo library access is required to back up iCloud Photos."
+            return "请允许 iCloudFriend 访问照片后再开始同步。"
         case .destinationAccessFailed:
             return "The selected backup folder can no longer be opened."
         case .noResources(let name):

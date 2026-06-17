@@ -8,11 +8,13 @@ const path = require('path');
 const { pipeline } = require('stream/promises');
 const { Bonjour } = require('bonjour-service');
 const selfsigned = require('selfsigned');
+const { mirrorAssetToVisibleFolder } = require('./visibleBackup');
 
 const SERVICE_TYPE = 'icloudfriend';
 const PROTOCOL_VERSION = 1;
+const DISCOVERY_HTTP_PORT = 52119;
 
-function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
+function createReceiverServer({ getBackupRoot, getPublicBackupRoot, certDirectory, onChanged }) {
   let server = null;
   let plainServer = null;
   let bonjour = null;
@@ -30,6 +32,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     httpNetworkUrls: [],
     discoveryAvailable: false,
     discoveryMessage: null,
+    discoveryInterface: null,
     client: null,
     sync: null,
     protocolVersion: PROTOCOL_VERSION
@@ -49,7 +52,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     plainServer = http.createServer(handleRequest);
 
     await listen(server);
-    await listen(plainServer);
+    await listen(plainServer, DISCOVERY_HTTP_PORT);
 
     const port = server.address().port;
     const httpPort = plainServer.address().port;
@@ -69,13 +72,15 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       httpNetworkUrls: localNetworkUrls(httpPort, 'http'),
       discoveryAvailable: false,
       discoveryMessage: 'Auto-discovery is starting.',
+      discoveryInterface: null,
       client: null,
       sync: null,
       protocolVersion: PROTOCOL_VERSION
     };
 
     try {
-      bonjour = new Bonjour({}, markDiscoveryUnavailable);
+      const discoveryInterface = preferredDiscoveryInterface();
+      bonjour = new Bonjour(discoveryInterface ? { interface: discoveryInterface.address } : {}, markDiscoveryUnavailable);
       advertisement = bonjour.publish({
         name: serviceName,
         type: SERVICE_TYPE,
@@ -93,6 +98,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       }
       status.discoveryAvailable = true;
       status.discoveryMessage = null;
+      status.discoveryInterface = discoveryInterface;
     } catch (error) {
       markDiscoveryUnavailable(error);
     }
@@ -123,6 +129,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       httpNetworkUrls: [],
       discoveryAvailable: false,
       discoveryMessage: null,
+      discoveryInterface: null,
       client: null,
       sync: null,
       protocolVersion: PROTOCOL_VERSION
@@ -164,6 +171,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       networkUrls: status.port ? localNetworkUrls(status.port) : [],
       httpNetworkUrls: status.httpPort ? localNetworkUrls(status.httpPort, 'http') : [],
       loopbackHttpUrl: status.httpPort ? `http://127.0.0.1:${status.httpPort}` : null,
+      discoveryInterface: status.discoveryInterface,
       backupRoot: getBackupRoot()
     };
   }
@@ -337,6 +345,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
 
   async function commitAsset(body) {
     const backupRoot = getBackupRoot();
+    const publicRoot = getPublicBackupRoot?.() || path.dirname(backupRoot);
     const assetFolder = sanitizeRelativePath(body.assetFolder || '');
     const sidecar = body.sidecar;
     const event = body.event;
@@ -353,9 +362,15 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     const eventsPath = safeJoin(backupRoot, 'index', 'events.ndjson');
     await fs.mkdir(path.dirname(eventsPath), { recursive: true });
     await fs.appendFile(eventsPath, `${JSON.stringify(event)}\n`);
+    const visible = await mirrorAssetToVisibleFolder({
+      internalRoot: backupRoot,
+      publicRoot,
+      assetFolder,
+      sidecar
+    });
     onChanged?.();
 
-    return { ok: true, assetFolder };
+    return { ok: true, assetFolder, visibleFolder: visible.visibleFolder };
   }
 
   return {
@@ -366,13 +381,27 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
   };
 }
 
-function listen(targetServer) {
+function listen(targetServer, preferredPort = 0) {
   return new Promise((resolve, reject) => {
-    targetServer.once('error', reject);
-    targetServer.listen(0, '0.0.0.0', () => {
-      targetServer.off('error', reject);
-      resolve();
-    });
+    const attemptListen = (port, allowFallback) => {
+      const onError = (error) => {
+        targetServer.off('listening', onListening);
+        if (allowFallback && error.code === 'EADDRINUSE') {
+          attemptListen(0, false);
+          return;
+        }
+        reject(error);
+      };
+      const onListening = () => {
+        targetServer.off('error', onError);
+        resolve();
+      };
+
+      targetServer.once('error', onError);
+      targetServer.listen(port, '0.0.0.0', onListening);
+    };
+
+    attemptListen(preferredPort, preferredPort !== 0);
   });
 }
 
@@ -425,7 +454,7 @@ function localHostname() {
 }
 
 function localNetworkUrls(port, scheme = 'https') {
-  return localNetworkCandidates()
+  return usableNetworkCandidates()
     .map((candidate) => `${scheme}://${candidate.address}:${port}`);
 }
 
@@ -444,6 +473,7 @@ function localNetworkCandidates() {
         continue;
       }
       candidates.push({
+        name,
         address: entry.address,
         interfaceRank: virtualInterfaceRank(name, entry),
         networkRank: privateNetworkRank(entry.address)
@@ -458,6 +488,23 @@ function localNetworkCandidates() {
         || left.address.localeCompare(right.address);
     })
     .filter((candidate, index, list) => list.findIndex((item) => item.address === candidate.address) === index);
+}
+
+function usableNetworkCandidates() {
+  const candidates = localNetworkCandidates();
+  const physicalCandidates = candidates.filter((candidate) => candidate.interfaceRank === 0);
+  return physicalCandidates.length > 0 ? physicalCandidates : candidates;
+}
+
+function preferredDiscoveryInterface() {
+  const candidate = usableNetworkCandidates()[0];
+  if (!candidate) {
+    return null;
+  }
+  return {
+    name: candidate.name,
+    address: candidate.address
+  };
 }
 
 function isIPv4Entry(entry) {

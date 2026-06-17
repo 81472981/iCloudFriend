@@ -8,18 +8,26 @@ iCloudFriend is a two-part backup system for moving original iCloud Photos asset
 
 ## What Gets Backed Up
 
-Each asset is stored under the `Backup/.icloudfriend` folder managed by the Windows app:
+Each asset is stored in two places under the Windows app's `Backup` folder: originals are mirrored into the visible `Photos` folder for normal browsing, while `.icloudfriend` keeps the internal index used for resume and incremental sync.
 
 ```text
-.icloudfriend/
-  assets/
+Backup/
+  Photos/
     2026/
       06/
         4d2c...-IMG_1234/
+          IMG_1234.HEIC
+          IMG_1234.MOV
           metadata.json
-          resources/
-            IMG_1234.HEIC
-            IMG_1234.MOV
+  .icloudfriend/
+    assets/
+      2026/
+        06/
+          4d2c...-IMG_1234/
+            metadata.json
+            resources/
+              IMG_1234.HEIC
+              IMG_1234.MOV
 ```
 
 The app exports all available `PHAssetResource` entries for an asset, including original photos, videos, paired Live Photo movies, adjustment data, and full-size resources when Photos exposes them. A JSON sidecar preserves timestamps, location, dimensions, favorite/hidden flags, media type, and resource checksums.

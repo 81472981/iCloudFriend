@@ -9,6 +9,9 @@ const elements = {
   totalAssets: document.getElementById('totalAssets'),
   assetProgress: document.getElementById('assetProgress'),
   backupHint: document.getElementById('backupHint'),
+  photoGrid: document.getElementById('photoGrid'),
+  photoEmpty: document.getElementById('photoEmpty'),
+  previewCount: document.getElementById('previewCount'),
   toast: document.getElementById('toast'),
   chooseFolderButton: document.getElementById('chooseFolderButton'),
   openFolderButton: document.getElementById('openFolderButton'),
@@ -19,7 +22,9 @@ const elements = {
 let currentSettings = null;
 let currentStats = null;
 let currentReceiver = null;
+let currentPhotos = [];
 let toastTimer = null;
+let photoRefreshTimer = null;
 
 async function boot() {
   bindEvents();
@@ -33,6 +38,7 @@ async function boot() {
   api.onBackupUpdate((stats) => {
     currentStats = stats;
     renderDashboard();
+    schedulePhotoRefresh();
   });
 }
 
@@ -66,7 +72,7 @@ function bindEvents() {
 }
 
 async function refreshAll() {
-  await Promise.all([refreshStats(), refreshReceiver()]);
+  await Promise.all([refreshStats(), refreshReceiver(), refreshPhotos()]);
 }
 
 async function refreshStats() {
@@ -77,6 +83,11 @@ async function refreshStats() {
 async function refreshReceiver() {
   currentReceiver = await api.getReceiverStatus();
   renderDashboard();
+}
+
+async function refreshPhotos() {
+  currentPhotos = await api.listPhotos();
+  renderPhotos();
 }
 
 function renderSettings(settings) {
@@ -97,7 +108,7 @@ function renderDevice() {
   elements.receiverState.textContent = currentReceiver?.running ? primaryReceiverUrl() : '未启动';
   elements.copyReceiverButton.disabled = !currentReceiver?.running || !primaryReceiverUrl();
 
-  const state = connectionState(sync, client, clientIsLatest);
+  const state = connectionState(sync, client);
   elements.connectionState.textContent = state.label;
   elements.connectionState.className = `state-pill ${state.tone}`;
 }
@@ -139,40 +150,91 @@ function renderCounts() {
   }
 }
 
+function renderPhotos() {
+  elements.previewCount.textContent = `${formatNumber(currentPhotos.length)} 张`;
+  elements.photoGrid.replaceChildren();
+  elements.photoEmpty.hidden = currentPhotos.length > 0;
+
+  for (const photo of currentPhotos) {
+    elements.photoGrid.appendChild(photoCard(photo));
+  }
+}
+
+function photoCard(photo) {
+  const card = document.createElement('button');
+  card.className = 'photo-card';
+  card.type = 'button';
+  card.title = `打开 ${photo.filename}`;
+  card.addEventListener('click', async () => {
+    const message = await api.openPhoto(photo.filePath);
+    if (message) {
+      showToast(message);
+    }
+  });
+
+  const thumb = document.createElement('div');
+  thumb.className = 'photo-thumb';
+  if (photo.thumbnailDataUrl) {
+    const image = document.createElement('img');
+    image.src = photo.thumbnailDataUrl;
+    image.alt = photo.title || photo.filename || '照片';
+    thumb.appendChild(image);
+  } else {
+    const placeholder = document.createElement('span');
+    placeholder.textContent = 'PHOTO';
+    thumb.appendChild(placeholder);
+  }
+
+  const title = document.createElement('strong');
+  title.textContent = photo.title || photo.filename || '照片';
+
+  const date = document.createElement('span');
+  date.className = 'photo-date';
+  date.textContent = formatDate(photo.creationDate || photo.backedUpAt || photo.timestamp);
+
+  card.append(thumb, title, date);
+  return card;
+}
+
+function schedulePhotoRefresh() {
+  clearTimeout(photoRefreshTimer);
+  photoRefreshTimer = setTimeout(() => {
+    refreshPhotos().catch((error) => showToast(error.message || String(error)));
+  }, 650);
+}
+
 function latestSyncStatus() {
   return currentReceiver?.sync || currentStats?.syncStatus || null;
 }
 
-function connectionState(sync, client, clientIsLatest) {
+function connectionState(sync, client) {
   if (!currentReceiver?.running) {
     return { label: '未启动', tone: 'offline' };
   }
 
-  if (client && (!sync || clientIsLatest)) {
-    return { label: isFresh(client.connectedAt) ? '已连接' : '最近连接', tone: 'online' };
-  }
-
-  if (!sync) {
+  const latestContact = latestConnectionTime(sync, client);
+  if (!latestContact) {
     return { label: '未连接', tone: 'waiting' };
   }
 
-  if (sync.runStatus === 'running') {
-    return { label: isFresh(sync.updatedAt) ? '正在备份' : '最近连接', tone: 'online' };
+  if (isFresh(latestContact)) {
+    return { label: '已连接', tone: 'online' };
   }
 
-  if (sync.runStatus === 'finished') {
-    return { label: '已完成', tone: 'online' };
-  }
+  return { label: '已断开', tone: 'offline' };
+}
 
-  if (sync.runStatus === 'failed') {
-    return { label: '备份失败', tone: 'warning' };
-  }
-
-  if (sync.runStatus === 'cancelled') {
-    return { label: '已取消', tone: 'waiting' };
-  }
-
-  return { label: '已连接', tone: 'online' };
+function latestConnectionTime(sync, client) {
+  return [client?.connectedAt, sync?.updatedAt].reduce((latest, value) => {
+    const time = Date.parse(value || '');
+    if (Number.isNaN(time)) {
+      return latest;
+    }
+    if (!latest || time > latest.time) {
+      return { value, time };
+    }
+    return latest;
+  }, null)?.value || null;
 }
 
 function isFresh(value) {
@@ -197,6 +259,20 @@ function isNewer(left, right) {
 
 function formatNumber(value) {
   return new Intl.NumberFormat().format(value || 0);
+}
+
+function formatDate(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) {
+    return '未知时间';
+  }
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
 }
 
 function showToast(message) {
