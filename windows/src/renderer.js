@@ -90,12 +90,14 @@ function renderDashboard() {
 
 function renderDevice() {
   const sync = latestSyncStatus();
+  const client = currentReceiver?.client || null;
+  const clientIsLatest = client && (!sync || isNewer(client.connectedAt, sync.updatedAt));
 
-  elements.deviceName.textContent = sync?.deviceName || '等待 iOS 连接';
+  elements.deviceName.textContent = (clientIsLatest ? client.deviceName : sync?.deviceName) || client?.deviceName || '等待 iOS 连接';
   elements.receiverState.textContent = currentReceiver?.running ? primaryReceiverUrl() : '未启动';
   elements.copyReceiverButton.disabled = !currentReceiver?.running || !primaryReceiverUrl();
 
-  const state = connectionState(sync);
+  const state = connectionState(sync, client, clientIsLatest);
   elements.connectionState.textContent = state.label;
   elements.connectionState.className = `state-pill ${state.tone}`;
 }
@@ -134,9 +136,13 @@ function latestSyncStatus() {
   return currentReceiver?.sync || currentStats?.syncStatus || null;
 }
 
-function connectionState(sync) {
+function connectionState(sync, client, clientIsLatest) {
   if (!currentReceiver?.running) {
     return { label: '未启动', tone: 'offline' };
+  }
+
+  if (client && (!sync || clientIsLatest)) {
+    return { label: isFresh(client.connectedAt) ? '已连接' : '最近连接', tone: 'online' };
   }
 
   if (!sync) {
@@ -168,6 +174,18 @@ function isFresh(value) {
     return false;
   }
   return Date.now() - time < 45_000;
+}
+
+function isNewer(left, right) {
+  const leftTime = Date.parse(left || '');
+  const rightTime = Date.parse(right || '');
+  if (Number.isNaN(leftTime)) {
+    return false;
+  }
+  if (Number.isNaN(rightTime)) {
+    return true;
+  }
+  return leftTime >= rightTime;
 }
 
 function formatNumber(value) {

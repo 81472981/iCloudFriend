@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var selectedMode: BackupMode = .incremental
     @State private var manualAddress = ""
     @State private var manualAddressError: String?
+    @State private var isManualConnecting = false
+    @State private var connectingDeviceID: String?
 
     private let orange = Color(red: 1.0, green: 0.58, blue: 0.08)
     private let red = Color(red: 1.0, green: 0.22, blue: 0.20)
@@ -64,11 +66,12 @@ struct ContentView: View {
                     } else {
                         ForEach(receiverDiscovery.devices) { device in
                             Button {
-                                receiverDiscovery.select(device)
+                                connect(device)
                             } label: {
                                 deviceRow(device)
                             }
                             .buttonStyle(.plain)
+                            .disabled(connectingDeviceID != nil || isManualConnecting)
 
                             if device.id != receiverDiscovery.devices.last?.id {
                                 Divider().padding(.leading, 68)
@@ -118,7 +121,7 @@ struct ContentView: View {
                     .padding(.vertical, 11)
                     .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                Button("连接") {
+                Button(isManualConnecting ? "连接中" : "连接") {
                     connectManualAddress()
                 }
                 .font(.subheadline.weight(.semibold))
@@ -126,24 +129,62 @@ struct ContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
                 .background(red, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .disabled(isManualConnecting)
             }
 
             if let manualAddressError {
                 Text(manualAddressError)
                     .font(.caption)
                     .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14)
         .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
+    private func connect(_ device: ReceiverDevice) {
+        guard connectingDeviceID == nil, !isManualConnecting else { return }
+        connectingDeviceID = device.id
+        manualAddressError = nil
+
+        Task {
+            do {
+                try await ReceiverClient(device: device).hello()
+                await MainActor.run {
+                    receiverDiscovery.select(device)
+                    connectingDeviceID = nil
+                    manualAddressError = nil
+                }
+            } catch {
+                await MainActor.run {
+                    manualAddressError = connectionMessage(for: error)
+                    connectingDeviceID = nil
+                }
+            }
+        }
+    }
+
     private func connectManualAddress() {
-        do {
-            try receiverDiscovery.selectManualAddress(manualAddress)
-            manualAddressError = nil
-        } catch {
-            manualAddressError = error.localizedDescription
+        guard !isManualConnecting else { return }
+        isManualConnecting = true
+        manualAddressError = nil
+
+        Task {
+            do {
+                let device = try receiverDiscovery.manualDevice(from: manualAddress)
+                try await ReceiverClient(device: device).hello()
+                await MainActor.run {
+                    receiverDiscovery.select(device)
+                    manualAddressError = nil
+                    isManualConnecting = false
+                }
+            } catch {
+                await MainActor.run {
+                    manualAddressError = connectionMessage(for: error)
+                    isManualConnecting = false
+                }
+            }
         }
     }
 
@@ -183,9 +224,14 @@ struct ContentView: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.tertiary)
+            if connectingDeviceID == device.id {
+                ProgressView()
+                    .scaleEffect(0.75)
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -334,6 +380,25 @@ struct ContentView: View {
         case .failed:
             return "同步失败"
         }
+    }
+
+    private func connectionMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch URLError.Code(rawValue: nsError.code) {
+            case .secureConnectionFailed,
+                 .serverCertificateUntrusted,
+                 .serverCertificateHasBadDate,
+                 .serverCertificateHasUnknownRoot,
+                 .serverCertificateNotYetValid:
+                return "TLS 连接失败，请在 Windows 端复制最新连接地址后重试。"
+            case .cannotConnectToHost, .cannotFindHost, .timedOut, .networkConnectionLost, .notConnectedToInternet:
+                return "无法连接 Windows 端，请确认两端在同一网络且 Windows 程序已打开。"
+            default:
+                break
+            }
+        }
+        return error.localizedDescription
     }
 }
 

@@ -26,6 +26,11 @@
 	<string>iCloudFriend needs access to back up your original photos, videos, and metadata to your Windows receiver.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>iCloudFriend uses the local network to discover and connect to your Windows backup receiver.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_icloudfriend._tcp</string>

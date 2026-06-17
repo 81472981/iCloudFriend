@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 private struct AssetStatusRequest: Encodable {
     let assetFolder: String
@@ -65,6 +66,7 @@ final class ReceiverClient: NSObject, URLSessionDelegate {
     func hello() async throws {
         var request = URLRequest(url: endpoint("api/hello"))
         request.httpMethod = "GET"
+        addDeviceHeaders(to: &request)
         _ = try await data(for: request)
     }
 
@@ -117,6 +119,7 @@ final class ReceiverClient: NSObject, URLSessionDelegate {
             request.httpMethod = "PUT"
             request.setValue(String(byteCount), forHTTPHeaderField: "X-Expected-Bytes")
             request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+            addDeviceHeaders(to: &request)
             request.httpBody = chunk
 
             let response: ResourceUploadResponse = try await decoded(for: request)
@@ -193,8 +196,14 @@ final class ReceiverClient: NSObject, URLSessionDelegate {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addDeviceHeaders(to: &request)
         request.httpBody = try encode(value)
         return try await decoded(for: request)
+    }
+
+    private func addDeviceHeaders(to request: inout URLRequest) {
+        request.setValue(UIDevice.current.name, forHTTPHeaderField: "X-iCloudFriend-Device-Name")
+        request.setValue(UIDevice.current.identifierForVendor?.uuidString, forHTTPHeaderField: "X-iCloudFriend-Device-ID")
     }
 
     private func decoded<Response: Decodable>(for request: URLRequest) async throws -> Response {

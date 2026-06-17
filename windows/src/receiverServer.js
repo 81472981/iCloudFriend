@@ -24,6 +24,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
     networkUrls: [],
     discoveryAvailable: false,
     discoveryMessage: null,
+    client: null,
     sync: null,
     protocolVersion: PROTOCOL_VERSION
   };
@@ -61,6 +62,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       networkUrls: localNetworkUrls(port),
       discoveryAvailable: false,
       discoveryMessage: 'Auto-discovery is starting.',
+      client: null,
       sync: null,
       protocolVersion: PROTOCOL_VERSION
     };
@@ -105,6 +107,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       networkUrls: [],
       discoveryAvailable: false,
       discoveryMessage: null,
+      client: null,
       sync: null,
       protocolVersion: PROTOCOL_VERSION
     };
@@ -152,6 +155,7 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
       const requestUrl = new URL(request.url, 'https://localhost');
 
       if (request.method === 'GET' && requestUrl.pathname === '/api/hello') {
+        markClientConnected(request);
         return sendJson(response, 200, {
           app: 'iCloudFriend',
           hostname: os.hostname(),
@@ -196,6 +200,21 @@ function createReceiverServer({ getBackupRoot, certDirectory, onChanged }) {
         message: error.message || String(error)
       });
     }
+  }
+
+  function markClientConnected(request) {
+    const deviceName = cleanText(request.headers['x-icloudfriend-device-name'], 'iOS 设备');
+    const deviceIdentifier = cleanText(request.headers['x-icloudfriend-device-id'], null);
+    status = {
+      ...status,
+      client: {
+        deviceName,
+        deviceIdentifier,
+        remoteAddress: request.socket.remoteAddress || null,
+        connectedAt: new Date().toISOString()
+      }
+    };
+    onChanged?.();
   }
 
   async function readAssetStatus(body) {
@@ -339,33 +358,33 @@ async function loadOrCreateCertificate(certDirectory) {
       fs.readFile(keyPath, 'utf8'),
       fs.readFile(certPath, 'utf8')
     ]);
-    return { key, cert, fingerprint: certificateFingerprint(cert) };
+    if (certificateMatchesCurrentNetwork(cert)) {
+      return { key, cert, fingerprint: certificateFingerprint(cert) };
+    }
   } catch {
-    const attrs = [{ name: 'commonName', value: localHostname() }];
-    const pem = await selfsigned.generate(attrs, {
-      days: 3650,
-      keySize: 2048,
-      algorithm: 'sha256',
-      extensions: [
-        { name: 'basicConstraints', cA: false },
-        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
-        { name: 'extKeyUsage', serverAuth: true },
-        {
-          name: 'subjectAltName',
-          altNames: [
-            { type: 2, value: localHostname() },
-            { type: 2, value: cleanHostname() },
-            { type: 7, ip: '127.0.0.1' }
-          ]
-        }
-      ]
-    });
-    await Promise.all([
-      fs.writeFile(keyPath, pem.private),
-      fs.writeFile(certPath, pem.cert)
-    ]);
-    return { key: pem.private, cert: pem.cert, fingerprint: certificateFingerprint(pem.cert) };
+    // Missing or unreadable certificates are regenerated below.
   }
+
+  const attrs = [{ name: 'commonName', value: localHostname() }];
+  const pem = await selfsigned.generate(attrs, {
+    days: 397,
+    keySize: 2048,
+    algorithm: 'sha256',
+    extensions: [
+      { name: 'basicConstraints', cA: false },
+      { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
+      { name: 'extKeyUsage', serverAuth: true },
+      {
+        name: 'subjectAltName',
+        altNames: certificateAltNames()
+      }
+    ]
+  });
+  await Promise.all([
+    fs.writeFile(keyPath, pem.private),
+    fs.writeFile(certPath, pem.cert)
+  ]);
+  return { key: pem.private, cert: pem.cert, fingerprint: certificateFingerprint(pem.cert) };
 }
 
 function cleanHostname() {
@@ -378,17 +397,26 @@ function localHostname() {
 }
 
 function localNetworkUrls(port) {
+  return localNetworkCandidates()
+    .map((candidate) => `https://${candidate.address}:${port}`);
+}
+
+function localIPv4Addresses() {
+  return localNetworkCandidates()
+    .map((candidate) => candidate.address);
+}
+
+function localNetworkCandidates() {
   const interfaces = os.networkInterfaces();
   const candidates = [];
 
   for (const [name, entries] of Object.entries(interfaces)) {
     for (const entry of entries || []) {
-      if (entry.family !== 'IPv4' || entry.internal || !entry.address) {
+      if (!isIPv4Entry(entry) || entry.internal || !entry.address) {
         continue;
       }
       candidates.push({
         address: entry.address,
-        url: `https://${entry.address}:${port}`,
         interfaceRank: virtualInterfaceRank(name, entry),
         networkRank: privateNetworkRank(entry.address)
       });
@@ -401,8 +429,38 @@ function localNetworkUrls(port) {
         || left.networkRank - right.networkRank
         || left.address.localeCompare(right.address);
     })
-    .filter((candidate, index, list) => list.findIndex((item) => item.address === candidate.address) === index)
-    .map((candidate) => candidate.url);
+    .filter((candidate, index, list) => list.findIndex((item) => item.address === candidate.address) === index);
+}
+
+function isIPv4Entry(entry) {
+  return entry?.family === 'IPv4' || entry?.family === 4;
+}
+
+function certificateAltNames() {
+  const dnsNames = [...new Set([localHostname(), cleanHostname()])]
+    .filter(Boolean)
+    .map((value) => ({ type: 2, value }));
+  const ipNames = [...new Set(['127.0.0.1', ...localIPv4Addresses()])]
+    .map((ip) => ({ type: 7, ip }));
+  return [...dnsNames, ...ipNames];
+}
+
+function certificateMatchesCurrentNetwork(cert) {
+  try {
+    const x509 = new crypto.X509Certificate(cert);
+    const subjectAltName = x509.subjectAltName || '';
+    return certificateAltNames().every((entry) => {
+      if (entry.type === 2) {
+        return subjectAltName.includes(`DNS:${entry.value}`);
+      }
+      if (entry.type === 7) {
+        return subjectAltName.includes(`IP Address:${entry.ip}`);
+      }
+      return true;
+    });
+  } catch {
+    return false;
+  }
 }
 
 function virtualInterfaceRank(name, entry) {

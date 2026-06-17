@@ -35,10 +35,13 @@ final class ReceiverDiscovery: NSObject, ObservableObject {
     }
 
     func select(_ device: ReceiverDevice) {
+        if !devices.contains(where: { $0.id == device.id }) {
+            devices.append(device)
+        }
         selectedDevice = device
     }
 
-    func selectManualAddress(_ value: String) throws {
+    func manualDevice(from value: String) throws -> ReceiverDevice {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = text.contains("://") ? text : "https://\(text)"
         guard let components = URLComponents(string: normalized),
@@ -49,7 +52,7 @@ final class ReceiverDiscovery: NSObject, ObservableObject {
             throw ReceiverDiscoveryError.invalidManualAddress
         }
 
-        let device = ReceiverDevice(
+        return ReceiverDevice(
             id: "manual-\(host)-\(port)",
             name: "iCloudFriend \(host)",
             hostName: host,
@@ -57,11 +60,6 @@ final class ReceiverDiscovery: NSObject, ObservableObject {
             fingerprint: nil,
             protocolVersion: 1
         )
-
-        if !devices.contains(where: { $0.id == device.id }) {
-            devices.append(device)
-        }
-        selectedDevice = device
     }
 }
 

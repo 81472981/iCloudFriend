@@ -1,4 +1,5 @@
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs/promises');
 const https = require('https');
 const os = require('os');
@@ -49,8 +50,16 @@ async function testReceiverServer() {
     await receiver.start();
     const base = `https://127.0.0.1:${receiver.status().port}`;
     assert.ok(Array.isArray(receiver.status().networkUrls));
-    const hello = await requestJson('GET', `${base}/api/hello`);
+    const cert = await fs.readFile(path.join(root, 'cert', 'receiver.cert.pem'), 'utf8');
+    assert.match(new crypto.X509Certificate(cert).subjectAltName, /IP Address:127\.0\.0\.1/);
+
+    const hello = await requestJson('GET', `${base}/api/hello`, null, {
+      'x-icloudfriend-device-name': 'Smoke iPhone',
+      'x-icloudfriend-device-id': 'smoke-device'
+    });
     assert.equal(hello.app, 'iCloudFriend');
+    assert.equal(receiver.status().client.deviceName, 'Smoke iPhone');
+    assert.equal(receiver.status().client.deviceIdentifier, 'smoke-device');
 
     receiver.markDiscoveryUnavailable(Object.assign(new Error('send EHOSTUNREACH 224.0.0.251:5353'), {
       code: 'EHOSTUNREACH',
