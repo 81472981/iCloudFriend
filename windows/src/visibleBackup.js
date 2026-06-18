@@ -21,10 +21,7 @@ async function mirrorAssetToVisibleFolder({ internalRoot, publicRoot, assetFolde
       resource.relativePath || path.posix.join(safeAssetFolder.replaceAll(path.sep, '/'), 'resources', resource.storedFilename || '')
     );
     const sourcePath = safeJoin(internalRoot, sourceRelativePath);
-    const visibleName = cleanFileName(
-      resource.storedFilename || resource.originalFilename || path.basename(sourceRelativePath),
-      `resource-${mirrored + skipped + 1}`
-    );
+    const visibleName = visibleFileNameForResource(resource, mirrored + skipped, path.basename(sourceRelativePath));
     const targetPath = safeJoin(visibleFolder, visibleName);
     const expectedBytes = Number(resource.byteCount || 0);
 
@@ -161,6 +158,13 @@ function cleanFileName(value, fallback) {
   return cleaned || fallback;
 }
 
+function visibleFileNameForResource(resource, index = 0, fallbackName = '') {
+  return cleanFileName(
+    resource?.storedFilename || resource?.originalFilename || fallbackName,
+    `resource-${index + 1}`
+  );
+}
+
 function toPosix(value) {
   return String(value || '').split(path.sep).join('/');
 }
@@ -169,5 +173,6 @@ module.exports = {
   VISIBLE_PHOTOS_DIR,
   mirrorAssetToVisibleFolder,
   mirrorExistingBackups,
+  visibleFileNameForResource,
   visibleFolderForAsset
 };

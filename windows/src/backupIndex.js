@@ -1,5 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
+const { scanVisiblePhotos } = require('./photoPreview');
 
 async function pathExists(target) {
   try {
@@ -19,6 +20,13 @@ async function scanBackupRoot(backupRoot) {
     assetCount: 0,
     resourceCount: 0,
     totalBytes: 0,
+    visiblePhotosRoot: path.join(backupRoot, 'Photos'),
+    visiblePhotosExists: false,
+    visibleMediaCount: 0,
+    visiblePhotoCount: 0,
+    visibleVideoCount: 0,
+    visibleMediaBytes: 0,
+    visiblePhotoBytes: 0,
     syncStatus: null,
     recent: [],
     errors: [],
@@ -27,6 +35,14 @@ async function scanBackupRoot(backupRoot) {
 
   stats.disk = await readDiskStats(backupRoot);
   stats.syncStatus = await readSyncStatus(backupRoot);
+  const visibleStats = await scanVisiblePhotos(backupRoot);
+  stats.visiblePhotosRoot = visibleStats.photosRoot;
+  stats.visiblePhotosExists = visibleStats.exists;
+  stats.visibleMediaCount = visibleStats.mediaCount ?? visibleStats.photoCount;
+  stats.visiblePhotoCount = stats.visibleMediaCount;
+  stats.visibleVideoCount = visibleStats.videoCount || 0;
+  stats.visibleMediaBytes = visibleStats.totalBytes;
+  stats.visiblePhotoBytes = visibleStats.totalBytes;
 
   if (!stats.exists) {
     return stats;

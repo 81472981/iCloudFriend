@@ -39,6 +39,14 @@ final class BackupManager: ObservableObject {
         backgroundTask.end()
     }
 
+    func refreshReceiverBackupStatus() async {
+        guard !isRunning, let receiver = receiverDiscovery.selectedDevice else { return }
+
+        await refreshLocalMediaCount()
+        let client = ReceiverClient(device: receiver)
+        await refreshWindowsBackupCount(client: client)
+    }
+
     private func run(mode: BackupMode) async {
         var activeClient: ReceiverClient?
         backgroundTask.begin()
@@ -63,6 +71,7 @@ final class BackupManager: ObservableObject {
             progress.status = .running
             progress.totalAssets = assets.count
             progress.appendLog("Found \(assets.count) library assets")
+            await refreshWindowsBackupCount(client: client)
             let libraryDiagnostic = assets.isEmpty ? PhotoLibraryAccess.lastDiagnosticSummary : nil
             await reportSyncStatus(client: client, mode: mode, runStatus: "running", message: libraryDiagnostic)
 
@@ -74,6 +83,7 @@ final class BackupManager: ObservableObject {
             for asset in assets {
                 try Task.checkCancellation()
                 await self.backup(asset: asset, mode: mode, backupRoot: tempBackupRoot, client: client)
+                await refreshWindowsBackupCount(client: client)
                 await reportSyncStatus(client: client, mode: mode, runStatus: "running")
             }
 
@@ -86,6 +96,7 @@ final class BackupManager: ObservableObject {
                 progress.currentAssetName = ""
                 progress.currentResourceName = ""
                 progress.resourceProgress = 1
+                await refreshWindowsBackupCount(client: client)
                 progress.appendLog("Done: \(progress.completedAssets) assets, \(progress.failedAssets) failed")
                 await reportSyncStatus(client: client, mode: mode, runStatus: "finished", message: libraryDiagnostic)
             }
@@ -106,6 +117,24 @@ final class BackupManager: ObservableObject {
                     message: error.localizedDescription
                 )
             }
+        }
+    }
+
+    private func refreshLocalMediaCount() async {
+        do {
+            try await PhotoLibraryAccess.ensureAuthorized()
+            progress.totalAssets = PhotoLibraryAccess.countAllAssets()
+        } catch {
+            progress.appendLog("Unable to read iOS count: \(error.localizedDescription)")
+        }
+    }
+
+    private func refreshWindowsBackupCount(client: ReceiverClient) async {
+        do {
+            let status = try await client.backupStatus()
+            progress.windowsBackedUpAssets = status.visibleMediaCount ?? status.visiblePhotoCount
+        } catch {
+            progress.appendLog("Unable to read Windows count: \(error.localizedDescription)")
         }
     }
 
@@ -149,6 +178,7 @@ final class BackupManager: ObservableObject {
                record.fingerprint == fingerprint,
                try await client.assetIsCurrent(assetFolder: relativeAssetFolder, fingerprint: fingerprint) {
                 progress.completedAssets += 1
+                progress.resourceProgress = 1
                 progress.appendLog("Already current: \(displayName)")
                 return
             }

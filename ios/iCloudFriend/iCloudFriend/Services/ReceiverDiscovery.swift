@@ -127,15 +127,67 @@ final class ReceiverDiscovery: NSObject, ObservableObject {
 
     @MainActor
     private func upsertDiscoveredDevice(_ device: ReceiverDevice) {
-        if let index = devices.firstIndex(where: { $0.id == device.id }) {
-            devices[index] = device
-        } else if !devices.contains(where: { $0.hostName == device.hostName && $0.port == device.port }) {
+        let nextDevice: ReceiverDevice
+        if let index = devices.firstIndex(where: { Self.sameReceiver($0, device) }) {
+            nextDevice = Self.preferredDevice(existing: devices[index], candidate: device)
+            devices[index] = nextDevice
+        } else {
+            nextDevice = device
             devices.append(device)
         }
 
-        if selectedDevice?.id == device.id {
-            selectedDevice = device
+        if let selectedDevice, Self.sameReceiver(selectedDevice, nextDevice) {
+            self.selectedDevice = nextDevice
         }
+    }
+
+    private static func sameReceiver(_ left: ReceiverDevice, _ right: ReceiverDevice) -> Bool {
+        if left.id == right.id {
+            return true
+        }
+
+        if let leftFingerprint = left.fingerprint,
+           let rightFingerprint = right.fingerprint,
+           !leftFingerprint.isEmpty,
+           leftFingerprint == rightFingerprint {
+            return true
+        }
+
+        if left.hostName == right.hostName && left.port == right.port {
+            return true
+        }
+
+        return normalizedReceiverName(left.name) == normalizedReceiverName(right.name)
+            && left.protocolVersion == right.protocolVersion
+            && (isLoopback(left.hostName) || isLoopback(right.hostName))
+    }
+
+    private static func preferredDevice(existing: ReceiverDevice, candidate: ReceiverDevice) -> ReceiverDevice {
+        if candidate.scheme == "http", existing.scheme != "http" {
+            return candidate
+        }
+
+        if isLoopback(candidate.hostName), !isLoopback(existing.hostName) {
+            return candidate
+        }
+
+        if existing.fingerprint == nil, candidate.fingerprint != nil {
+            return candidate
+        }
+
+        return existing
+    }
+
+    private static func normalizedReceiverName(_ name: String) -> String {
+        name
+            .replacingOccurrences(of: "iCloudFriend ", with: "")
+            .replacingOccurrences(of: ".local", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+
+    private static func isLoopback(_ hostName: String) -> Bool {
+        hostName == "127.0.0.1" || hostName == "localhost" || hostName == "::1"
     }
 
     private static func probeFallbackHost(_ host: String, session: URLSession) async -> ReceiverDevice? {
@@ -334,15 +386,7 @@ extension ReceiverDiscovery: NetServiceDelegate {
         )
 
         DispatchQueue.main.async {
-            if let index = self.devices.firstIndex(where: { $0.id == device.id }) {
-                self.devices[index] = device
-            } else {
-                self.devices.append(device)
-            }
-
-            if self.selectedDevice?.id == device.id {
-                self.selectedDevice = device
-            }
+            self.upsertDiscoveredDevice(device)
         }
     }
 

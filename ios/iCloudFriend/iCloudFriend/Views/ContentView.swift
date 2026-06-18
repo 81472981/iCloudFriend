@@ -296,6 +296,12 @@ struct ContentView: View {
             }
             .padding(.horizontal, 20)
         }
+        .task(id: receiverDiscovery.selectedDevice?.id) {
+            while !Task.isCancelled, receiverDiscovery.selectedDevice != nil {
+                await backupManager.refreshReceiverBackupStatus()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
     }
 
     private var connectedHeader: some View {
@@ -337,19 +343,13 @@ struct ContentView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.22), value: backupManager.progress.assetFraction)
 
-                VStack(spacing: 8) {
-                    Text("\(backupManager.progress.completedAssets)")
-                        .font(.system(size: 56, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(skyBlue)
-
-                    Text(totalText)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.66))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                }
-                .padding(.horizontal, 18)
+                Text(countPairText)
+                    .font(.system(size: 46, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(skyBlue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.56)
+                    .padding(.horizontal, 22)
             }
             .frame(width: 188, height: 188)
             .accessibilityElement(children: .combine)
@@ -359,7 +359,48 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(1)
+
+            if backupManager.isRunning {
+                fileProgressView
+            }
         }
+    }
+
+    private var countPairText: String {
+        "\(backupManager.progress.displayBackedUpAssets)/\(backupManager.progress.totalAssets)"
+    }
+
+    private var fileProgressView: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(currentFileText)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.60))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.12))
+                    Capsule()
+                        .fill(LinearGradient(colors: [cyanBlue, skyBlue], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: proxy.size.width * CGFloat(backupManager.progress.resourceProgress))
+                }
+            }
+            .frame(height: 7)
+            .clipShape(Capsule())
+        }
+        .frame(maxWidth: 236)
+    }
+
+    private var currentFileText: String {
+        if !backupManager.progress.currentResourceName.isEmpty {
+            return backupManager.progress.currentResourceName
+        }
+        if !backupManager.progress.currentAssetName.isEmpty {
+            return backupManager.progress.currentAssetName
+        }
+        return "准备同步文件"
     }
 
     private var mainActionButton: some View {
@@ -370,7 +411,7 @@ struct ContentView: View {
                 backupManager.start(mode: selectedMode)
             }
         } label: {
-            Label(backupManager.isRunning ? "停止同步照片" : "开始同步照片", systemImage: backupManager.isRunning ? "stop.fill" : "play.fill")
+            Label(backupManager.isRunning ? "停止同步" : "开始同步照片和视频", systemImage: backupManager.isRunning ? "stop.fill" : "play.fill")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -380,34 +421,16 @@ struct ContentView: View {
     }
 
     private var totalText: String {
+        let backedUp = backupManager.progress.displayBackedUpAssets
         let total = backupManager.progress.totalAssets
-        guard total > 0 else {
-            return "已同步 \(backupManager.progress.completedAssets) 张"
-        }
-        return "已同步 \(backupManager.progress.completedAssets) / \(total) 张"
+        return "本手机已备份到 Windows \(backedUp) 项，本手机照片和视频 \(total) 项"
     }
 
     private var statusText: String {
         if case .failed(let message) = backupManager.progress.status {
             return message
         }
-        if !backupManager.progress.currentAssetName.isEmpty {
-            return backupManager.progress.currentAssetName
-        }
-        switch backupManager.progress.status {
-        case .idle:
-            return "准备开始同步"
-        case .preparing:
-            return "正在准备照片"
-        case .running:
-            return "正在同步"
-        case .finished:
-            return "同步完成"
-        case .cancelled:
-            return "已取消"
-        case .failed:
-            return "同步失败"
-        }
+        return "同步进度：\(backupManager.progress.assetPercent)%"
     }
 
     private func connectionMessage(for error: Error) -> String {

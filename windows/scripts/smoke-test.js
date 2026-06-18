@@ -6,7 +6,7 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 const { scanBackupRoot } = require('../src/backupIndex');
-const { listPreviewPhotos } = require('../src/photoPreview');
+const { listPreviewPhotos, scanVisiblePhotos } = require('../src/photoPreview');
 const { createReceiverServer } = require('../src/receiverServer');
 
 async function main() {
@@ -31,6 +31,7 @@ async function main() {
 
   const stats = await scanBackupRoot(root);
   assert.equal(stats.assetCount, 1);
+  assert.equal(stats.visiblePhotoCount, 0);
   assert.equal(stats.resourceCount, 1);
   assert.equal(stats.totalBytes, 1024);
   assert.equal(stats.recent[0].firstFilename, 'IMG_0001.HEIC');
@@ -45,18 +46,24 @@ async function testPhotoPreview() {
   try {
     await writePreviewAsset(root, '2026/06/newer', 'NEWER.JPG', '2026-06-17T08:00:00Z');
     await writePreviewAsset(root, '2024/01/older', 'OLDER.JPG', '2024-01-02T08:00:00Z');
+    await writePreviewAsset(root, '2025/03/video', 'CLIP.MP4', '2025-03-04T08:00:00Z', 'video');
 
     const photos = await listPreviewPhotos(root);
-    assert.equal(photos.length, 2);
+    const visibleStats = await scanVisiblePhotos(root);
+    assert.equal(photos.length, 3);
+    assert.equal(visibleStats.mediaCount, 3);
+    assert.equal(visibleStats.photoCount, 2);
+    assert.equal(visibleStats.videoCount, 1);
     assert.equal(photos[0].filename, 'NEWER.JPG');
-    assert.equal(photos[1].filename, 'OLDER.JPG');
+    assert.equal(photos[1].filename, 'CLIP.MP4');
+    assert.equal(photos[2].filename, 'OLDER.JPG');
     assert.match(photos[0].relativeFolder, /Photos/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 }
 
-async function writePreviewAsset(root, folder, filename, creationDate) {
+async function writePreviewAsset(root, folder, filename, creationDate, mediaType = 'image') {
   const assetDir = path.join(root, 'Photos', folder);
   await fs.mkdir(assetDir, { recursive: true });
   await fs.writeFile(path.join(assetDir, filename), `preview-${filename}`);
@@ -65,14 +72,14 @@ async function writePreviewAsset(root, folder, filename, creationDate) {
     backedUpAt: new Date().toISOString(),
     asset: {
       localIdentifier: filename,
-      mediaType: 'image',
+      mediaType,
       creationDate
     },
     resources: [
       {
         storedFilename: filename,
         originalFilename: filename,
-        resourceType: 'photo',
+        resourceType: mediaType === 'video' ? 'video' : 'photo',
         byteCount: 128
       }
     ]
@@ -196,10 +203,33 @@ async function testReceiverServer() {
 
     const stats = await scanBackupRoot(path.join(root, 'Backup'));
     assert.equal(stats.assetCount, 1);
+    assert.equal(stats.visibleMediaCount, 1);
+    assert.equal(stats.visiblePhotoCount, 1);
     assert.equal(stats.resourceCount, 1);
     assert.equal(stats.totalBytes, payload.length);
     assert.equal(stats.syncStatus.deviceName, 'Linda iPhone');
     assert.equal(stats.syncStatus.totalAssets, 42);
+
+    const currentAssetStatus = await requestJson('POST', `${base}/api/asset/status`, {
+      assetFolder: 'assets/2026/06/test-asset',
+      fingerprint: 'fingerprint'
+    });
+    assert.equal(currentAssetStatus.complete, true);
+    const backupStatus = await requestJson('GET', `${base}/api/backup/status`);
+    assert.equal(backupStatus.visibleMediaCount, 1);
+    assert.equal(backupStatus.visiblePhotoCount, 1);
+    assert.equal(backupStatus.sync.totalAssets, 42);
+
+    await fs.rm(visibleFile);
+    const missingVisibleStatus = await requestJson('POST', `${base}/api/asset/status`, {
+      assetFolder: 'assets/2026/06/test-asset',
+      fingerprint: 'fingerprint'
+    });
+    assert.equal(missingVisibleStatus.complete, false);
+    assert.equal((await scanBackupRoot(path.join(root, 'Backup'))).visibleMediaCount, 0);
+    assert.equal((await scanBackupRoot(path.join(root, 'Backup'))).visiblePhotoCount, 0);
+    assert.equal((await requestJson('GET', `${base}/api/backup/status`)).visibleMediaCount, 0);
+    assert.equal((await requestJson('GET', `${base}/api/backup/status`)).visiblePhotoCount, 0);
   } finally {
     await receiver.stop();
     await fs.rm(root, { recursive: true, force: true });

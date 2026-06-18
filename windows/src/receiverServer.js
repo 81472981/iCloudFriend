@@ -8,7 +8,12 @@ const path = require('path');
 const { pipeline } = require('stream/promises');
 const { Bonjour } = require('bonjour-service');
 const selfsigned = require('selfsigned');
-const { mirrorAssetToVisibleFolder } = require('./visibleBackup');
+const {
+  mirrorAssetToVisibleFolder,
+  visibleFileNameForResource,
+  visibleFolderForAsset
+} = require('./visibleBackup');
+const { scanVisiblePhotos } = require('./photoPreview');
 
 const SERVICE_TYPE = 'icloudfriend';
 const PROTOCOL_VERSION = 1;
@@ -195,6 +200,11 @@ function createReceiverServer({ getBackupRoot, getPublicBackupRoot, certDirector
         return sendJson(response, 200, getStatus());
       }
 
+      if (request.method === 'GET' && requestUrl.pathname === '/api/backup/status') {
+        markClientConnected(request);
+        return sendJson(response, 200, await readBackupStatus());
+      }
+
       if (request.method === 'POST' && requestUrl.pathname === '/api/asset/status') {
         const body = await readJson(request);
         return sendJson(response, 200, await readAssetStatus(body));
@@ -245,14 +255,19 @@ function createReceiverServer({ getBackupRoot, getPublicBackupRoot, certDirector
 
   async function readAssetStatus(body) {
     const backupRoot = getBackupRoot();
+    const publicRoot = getPublicBackupRoot?.() || path.dirname(backupRoot);
     const assetFolder = sanitizeRelativePath(body.assetFolder || '');
     const metadataPath = safeJoin(backupRoot, assetFolder, 'metadata.json');
 
     try {
       const data = await fs.readFile(metadataPath, 'utf8');
       const sidecar = JSON.parse(data);
+      const fingerprintMatches = sidecar.asset?.fingerprint === body.fingerprint;
+      const visibleComplete = fingerprintMatches
+        ? await visibleAssetComplete(publicRoot, assetFolder, sidecar)
+        : false;
       return {
-        complete: sidecar.asset?.fingerprint === body.fingerprint,
+        complete: fingerprintMatches && visibleComplete,
         backedUpAt: sidecar.backedUpAt || null,
         resourceCount: Array.isArray(sidecar.resources) ? sidecar.resources.length : 0
       };
@@ -302,6 +317,21 @@ function createReceiverServer({ getBackupRoot, getPublicBackupRoot, certDirector
     onChanged?.();
 
     return { ok: true, sync: nextStatus };
+  }
+
+  async function readBackupStatus() {
+    const publicRoot = getPublicBackupRoot?.() || path.dirname(getBackupRoot());
+    const visible = await scanVisiblePhotos(publicRoot);
+    return {
+      ok: true,
+      visibleMediaCount: visible.mediaCount ?? visible.photoCount,
+      visiblePhotoCount: visible.mediaCount ?? visible.photoCount,
+      visibleVideoCount: visible.videoCount || 0,
+      visibleMediaBytes: visible.totalBytes,
+      visiblePhotoBytes: visible.totalBytes,
+      sync: status.sync || await readStoredSyncStatus(),
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async function receiveResource(request, requestUrl) {
@@ -371,6 +401,34 @@ function createReceiverServer({ getBackupRoot, getPublicBackupRoot, certDirector
     onChanged?.();
 
     return { ok: true, assetFolder, visibleFolder: visible.visibleFolder };
+  }
+
+  async function visibleAssetComplete(publicRoot, assetFolder, sidecar) {
+    const resources = Array.isArray(sidecar.resources) ? sidecar.resources : [];
+    if (resources.length === 0) {
+      return false;
+    }
+
+    const visibleFolder = visibleFolderForAsset(publicRoot, assetFolder);
+    for (const [index, resource] of resources.entries()) {
+      const visibleName = visibleFileNameForResource(resource, index);
+      const expectedBytes = Number(resource.byteCount || 0);
+      const actualBytes = await fileSize(path.join(visibleFolder, visibleName));
+      if (expectedBytes > 0 ? actualBytes !== expectedBytes : actualBytes <= 0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  async function readStoredSyncStatus() {
+    const syncPath = safeJoin(getBackupRoot(), 'index', 'sync-status.json');
+    try {
+      return JSON.parse(await fs.readFile(syncPath, 'utf8'));
+    } catch {
+      return null;
+    }
   }
 
   return {

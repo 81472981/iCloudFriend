@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const { pathExists, scanBackupRoot } = require('./backupIndex');
 const { createReceiverServer } = require('./receiverServer');
 const { listPreviewPhotos } = require('./photoPreview');
-const { VISIBLE_PHOTOS_DIR, mirrorExistingBackups } = require('./visibleBackup');
+const { VISIBLE_PHOTOS_DIR } = require('./visibleBackup');
 
 let mainWindow;
 let settings;
@@ -63,7 +63,6 @@ async function writeSettings(nextSettings) {
   await fs.mkdir(app.getPath('userData'), { recursive: true });
   await fs.writeFile(configPath(), JSON.stringify(settings, null, 2));
   await ensureBackupFolders();
-  await mirrorBackupsToVisibleFolder();
   restartWatcher();
   return settingsWithConnection();
 }
@@ -140,7 +139,6 @@ function createWindow() {
 async function initialize() {
   settings = await readSettings();
   await ensureBackupFolders();
-  await mirrorBackupsToVisibleFolder();
   receiverServer = createReceiverServer({
     getBackupRoot: () => path.join(backupTargetRoot(), '.icloudfriend'),
     getPublicBackupRoot: () => backupTargetRoot(),
@@ -230,7 +228,7 @@ ipcMain.handle('share:create', async () => {
 function restartWatcher() {
   stopWatcher();
 
-  const watchRoot = path.join(backupTargetRoot(), '.icloudfriend');
+  const watchRoot = backupTargetRoot();
   fs.mkdir(watchRoot, { recursive: true }).then(() => {
     watcher = legacyFs.watch(watchRoot, { recursive: true }, () => {
       scheduleScan();
@@ -265,17 +263,6 @@ function scheduleScan() {
     const stats = await scanBackupRoot(backupTargetRoot());
     mainWindow.webContents.send('backup:update', stats);
   }, 450);
-}
-
-async function mirrorBackupsToVisibleFolder() {
-  try {
-    await mirrorExistingBackups({
-      internalRoot: path.join(backupTargetRoot(), '.icloudfriend'),
-      publicRoot: backupTargetRoot()
-    });
-  } catch (error) {
-    console.warn(`Unable to prepare visible photo backups: ${error.message}`);
-  }
 }
 
 async function thumbnailDataUrl(filePath) {

@@ -68,6 +68,35 @@ enum PhotoLibraryAccess {
         return sortedAssets(uniqueAssets(optionImages + optionVideos))
     }
 
+    static func countAllAssets() -> Int {
+        let options = PHFetchOptions()
+        options.includeHiddenAssets = true
+        options.includeAllBurstAssets = true
+        options.includeAssetSourceTypes = [.typeUserLibrary, .typeCloudShared, .typeiTunesSynced]
+
+        let defaultAssets = PHAsset.fetchAssets(with: nil)
+        let optionAssets = PHAsset.fetchAssets(with: options)
+        let defaultImages = PHAsset.fetchAssets(with: .image, options: nil)
+        let optionImages = PHAsset.fetchAssets(with: .image, options: options)
+        let defaultVideos = PHAsset.fetchAssets(with: .video, options: nil)
+        let optionVideos = PHAsset.fetchAssets(with: .video, options: options)
+
+        if defaultAssets.count > 0 {
+            return defaultAssets.count
+        }
+
+        if optionAssets.count > 0 {
+            return optionAssets.count
+        }
+
+        let mediaCount = uniqueAssetCount(defaultImages, defaultVideos)
+        if mediaCount > 0 {
+            return mediaCount
+        }
+
+        return uniqueAssetCount(optionImages, optionVideos)
+    }
+
     private static func assets(from result: PHFetchResult<PHAsset>) -> [PHAsset] {
         var assets: [PHAsset] = []
         assets.reserveCapacity(result.count)
@@ -82,6 +111,16 @@ enum PhotoLibraryAccess {
         return assets.filter { asset in
             seen.insert(asset.localIdentifier).inserted
         }
+    }
+
+    private static func uniqueAssetCount(_ results: PHFetchResult<PHAsset>...) -> Int {
+        var identifiers = Set<String>()
+        for result in results {
+            result.enumerateObjects { asset, _, _ in
+                identifiers.insert(asset.localIdentifier)
+            }
+        }
+        return identifiers.count
     }
 
     private static func sortedAssets(_ assets: [PHAsset]) -> [PHAsset] {

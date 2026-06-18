@@ -12,22 +12,23 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">iCloudFriend Windows</p>
-          <h1>照片备份接收端</h1>
+          <h1>照片和视频备份接收端</h1>
         </div>
         <button id="refreshButton" class="button secondary">刷新</button>
       </header>
 
       <section class="dashboard">
         <article class="panel count-panel">
-          <p class="kicker">照片数量</p>
-          <div class="count-line">
-            <span id="assetCount">0</span>
-            <span class="slash">/</span>
-            <span id="totalAssets">--</span>
-          </div>
-          <div class="count-labels">
-            <span>已备份</span>
-            <span>总数量</span>
+          <p class="kicker">照片和视频数量</p>
+          <div class="count-grid">
+            <div class="count-metric">
+              <span id="assetCount" class="count-value">0</span>
+              <span class="count-label">已备份</span>
+            </div>
+            <div class="count-metric">
+              <span id="pendingAssets" class="count-value">--</span>
+              <span class="count-label">待备份</span>
+            </div>
           </div>
           <div class="progress-track" aria-hidden="true">
             <div id="assetProgress" class="progress-fill"></div>
@@ -58,13 +59,13 @@
       <section class="panel preview-panel">
         <div class="preview-header">
           <div>
-            <p class="kicker">照片预览</p>
-            <h2>最近备份照片</h2>
+            <p class="kicker">媒体预览</p>
+            <h2>最近备份照片和视频</h2>
           </div>
-          <span id="previewCount" class="preview-count">0 张</span>
+          <span id="previewCount" class="preview-count">0 项</span>
         </div>
         <div id="photoGrid" class="photo-grid" aria-live="polite"></div>
-        <p id="photoEmpty" class="hint preview-empty">备份完成后，这里会按照片时间倒序显示最近的照片。</p>
+        <p id="photoEmpty" class="hint preview-empty">备份完成后，这里会按时间倒序显示最近的照片和视频。</p>
       </section>
 
       <section class="panel folder-panel">

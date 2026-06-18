@@ -206,33 +206,37 @@ button {
   margin-top: 0;
 }
 
-.count-line {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin-top: 20px;
-  color: #082b3a;
+.count-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 22px 0 24px;
 }
 
-.count-line span {
-  font-size: 76px;
+.count-metric {
+  min-width: 0;
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(12, 27, 34, 0.09);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(15, 127, 209, 0.08), rgba(19, 163, 107, 0.04));
+}
+
+.count-value {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #082b3a;
+  font-size: 72px;
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0;
 }
 
-.count-line .slash {
-  color: rgba(8, 43, 58, 0.28);
-  font-size: 48px;
-}
-
-.count-labels {
-  display: flex;
-  gap: 72px;
-  margin: 10px 0 22px;
+.count-label {
+  display: block;
+  margin-top: 12px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 850;
 }
 
 .progress-track {
@@ -390,12 +394,16 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .count-line span {
-    font-size: 64px;
+  .count-grid {
+    gap: 12px;
   }
 
-  .count-line .slash {
-    font-size: 38px;
+  .count-metric {
+    padding: 16px 14px 14px;
+  }
+
+  .count-value {
+    font-size: 64px;
   }
 
   .button-row {

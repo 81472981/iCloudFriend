@@ -55,6 +55,7 @@ struct BackupProgress: Equatable {
     var status: BackupRunStatus = .idle
     var totalAssets: Int = 0
     var completedAssets: Int = 0
+    var windowsBackedUpAssets: Int?
     var failedAssets: Int = 0
     var currentAssetName: String = ""
     var currentResourceName: String = ""
@@ -64,7 +65,15 @@ struct BackupProgress: Equatable {
 
     var assetFraction: Double {
         guard totalAssets > 0 else { return 0 }
-        return min(1, Double(completedAssets) / Double(totalAssets))
+        return min(1, Double(displayBackedUpAssets) / Double(totalAssets))
+    }
+
+    var assetPercent: Int {
+        Int((assetFraction * 100).rounded())
+    }
+
+    var displayBackedUpAssets: Int {
+        windowsBackedUpAssets ?? completedAssets
     }
 
     var headline: String {

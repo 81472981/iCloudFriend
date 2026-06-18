@@ -6,7 +6,7 @@ const elements = {
   connectionState: document.getElementById('connectionState'),
   receiverState: document.getElementById('receiverState'),
   assetCount: document.getElementById('assetCount'),
-  totalAssets: document.getElementById('totalAssets'),
+  pendingAssets: document.getElementById('pendingAssets'),
   assetProgress: document.getElementById('assetProgress'),
   backupHint: document.getElementById('backupHint'),
   photoGrid: document.getElementById('photoGrid'),
@@ -130,28 +130,28 @@ function primaryReceiverUrl() {
 function renderCounts() {
   const sync = latestSyncStatus();
   const total = Number(sync?.totalAssets || 0);
-  const displayTotal = total > 0 ? total : null;
-  const scannedBackups = Number(currentStats?.assetCount || 0);
-  const reportedCompleted = Number(sync?.completedAssets || 0);
-  const rawBackedUp = Math.max(scannedBackups, reportedCompleted);
-  const backedUp = displayTotal ? Math.min(rawBackedUp, displayTotal) : rawBackedUp;
-  const percent = displayTotal ? Math.min(100, Math.round((backedUp / displayTotal) * 100)) : 0;
+  const hasIosTotal = total > 0;
+  const backedUp = Math.max(0, Number(currentStats?.visibleMediaCount ?? currentStats?.visiblePhotoCount ?? currentStats?.assetCount ?? 0));
+  const pending = hasIosTotal ? Math.max(total - backedUp, 0) : null;
+  const percent = hasIosTotal ? Math.min(100, Math.round((Math.min(backedUp, total) / total) * 100)) : 0;
 
   elements.assetCount.textContent = formatNumber(backedUp);
-  elements.totalAssets.textContent = displayTotal ? formatNumber(displayTotal) : '--';
+  elements.pendingAssets.textContent = pending === null ? '--' : formatNumber(pending);
   elements.assetProgress.style.width = `${percent}%`;
 
-  if (displayTotal) {
-    elements.backupHint.textContent = `已备份 ${formatNumber(backedUp)} / ${formatNumber(displayTotal)} 张，完成 ${percent}%。`;
+  if (hasIosTotal && pending > 0) {
+    elements.backupHint.textContent = `Windows 目录已备份 ${formatNumber(backedUp)} 项，iOS 端还有 ${formatNumber(pending)} 项待备份。`;
+  } else if (hasIosTotal) {
+    elements.backupHint.textContent = `Windows 目录已备份 ${formatNumber(backedUp)} 项，iOS 端暂无待备份照片和视频。`;
   } else if (backedUp > 0) {
-    elements.backupHint.textContent = `已备份 ${formatNumber(backedUp)} 张，等待 iOS 上报相册总数量。`;
+    elements.backupHint.textContent = `Windows 目录已备份 ${formatNumber(backedUp)} 项，等待 iOS 上报待备份数量。`;
   } else {
     elements.backupHint.textContent = '等待 iPhone 连接并开始备份。';
   }
 }
 
 function renderPhotos() {
-  elements.previewCount.textContent = `${formatNumber(currentPhotos.length)} 张`;
+  elements.previewCount.textContent = `${formatNumber(currentPhotos.length)} 项`;
   elements.photoGrid.replaceChildren();
   elements.photoEmpty.hidden = currentPhotos.length > 0;
 
@@ -177,16 +177,16 @@ function photoCard(photo) {
   if (photo.thumbnailDataUrl) {
     const image = document.createElement('img');
     image.src = photo.thumbnailDataUrl;
-    image.alt = photo.title || photo.filename || '照片';
+    image.alt = photo.title || photo.filename || '媒体文件';
     thumb.appendChild(image);
   } else {
     const placeholder = document.createElement('span');
-    placeholder.textContent = 'PHOTO';
+    placeholder.textContent = photo.mediaType === 'video' ? 'VIDEO' : 'PHOTO';
     thumb.appendChild(placeholder);
   }
 
   const title = document.createElement('strong');
-  title.textContent = photo.title || photo.filename || '照片';
+  title.textContent = photo.title || photo.filename || '媒体文件';
 
   const date = document.createElement('span');
   date.className = 'photo-date';

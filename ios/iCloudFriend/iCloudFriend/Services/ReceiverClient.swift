@@ -49,6 +49,19 @@ private struct BasicResponse: Decodable {
     let ok: Bool?
 }
 
+struct ReceiverBackupStatus: Decodable, Equatable {
+    let visibleMediaCount: Int?
+    let visiblePhotoCount: Int?
+    let sync: ReceiverSyncStatus?
+}
+
+struct ReceiverSyncStatus: Decodable, Equatable {
+    let totalAssets: Int?
+    let completedAssets: Int?
+    let failedAssets: Int?
+    let runStatus: String?
+}
+
 final class ReceiverClient: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     private let device: ReceiverDevice
     private lazy var session: URLSession = {
@@ -69,6 +82,13 @@ final class ReceiverClient: NSObject, URLSessionDelegate, URLSessionTaskDelegate
         request.httpMethod = "GET"
         addDeviceHeaders(to: &request)
         _ = try await data(for: request)
+    }
+
+    func backupStatus() async throws -> ReceiverBackupStatus {
+        var request = URLRequest(url: endpoint("api/backup/status"))
+        request.httpMethod = "GET"
+        addDeviceHeaders(to: &request)
+        return try await decoded(for: request)
     }
 
     func assetIsCurrent(assetFolder: String, fingerprint: String) async throws -> Bool {
