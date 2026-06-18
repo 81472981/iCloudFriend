@@ -21,7 +21,7 @@ final class BackupManager: ObservableObject {
         guard !isRunning else { return }
 
         isRunning = true
-        progress = BackupProgress(status: .preparing)
+        progress = BackupProgress(status: .preparing, usesSessionProgress: mode == .full)
         progress.appendLog("Starting \(mode.title.lowercased()) sync")
 
         task = Task { [weak self] in
@@ -43,6 +43,7 @@ final class BackupManager: ObservableObject {
         guard !isRunning, let receiver = receiverDiscovery.selectedDevice else { return }
 
         await refreshLocalMediaCount()
+        progress.usesSessionProgress = false
         let client = ReceiverClient(device: receiver)
         await refreshWindowsBackupCount(client: client)
     }
@@ -73,6 +74,20 @@ final class BackupManager: ObservableObject {
             progress.appendLog("Found \(assets.count) library assets")
             await refreshWindowsBackupCount(client: client)
             let libraryDiagnostic = assets.isEmpty ? PhotoLibraryAccess.lastDiagnosticSummary : nil
+
+            if mode == .incremental,
+               assets.count > 0,
+               progress.displayBackedUpAssets >= assets.count {
+                progress.completedAssets = assets.count
+                progress.currentAssetName = ""
+                progress.currentResourceName = ""
+                progress.resourceProgress = 0
+                progress.status = .finished
+                progress.appendLog("Already up to date")
+                await reportSyncStatus(client: client, mode: mode, runStatus: "finished", message: libraryDiagnostic)
+                return
+            }
+
             await reportSyncStatus(client: client, mode: mode, runStatus: "running", message: libraryDiagnostic)
 
             let tempBackupRoot = try makeTemporaryBackupRoot()
@@ -157,7 +172,6 @@ final class BackupManager: ObservableObject {
     private func backup(asset: PHAsset, mode: BackupMode, backupRoot: URL, client: ReceiverClient) async {
         let resources = AssetMetadataBuilder.resources(for: asset)
         let displayName = resources.first?.originalFilename ?? asset.localIdentifier
-        progress.currentAssetName = displayName
         progress.currentResourceName = ""
         progress.resourceProgress = 0
 
@@ -174,14 +188,22 @@ final class BackupManager: ObservableObject {
 
         do {
             if mode == .incremental,
-               let record = await stateStore.record(for: asset.localIdentifier),
-               record.fingerprint == fingerprint,
                try await client.assetIsCurrent(assetFolder: relativeAssetFolder, fingerprint: fingerprint) {
+                try? await stateStore.upsert(
+                    SyncRecord(
+                        localIdentifier: asset.localIdentifier,
+                        fingerprint: fingerprint,
+                        assetFolder: relativeAssetFolder,
+                        backedUpAt: Date()
+                    )
+                )
                 progress.completedAssets += 1
                 progress.resourceProgress = 1
                 progress.appendLog("Already current: \(displayName)")
                 return
             }
+
+            progress.currentAssetName = displayName
 
             try FileManager.default.createDirectory(
                 at: assetFolder.appendingPathComponent("resources", isDirectory: true),

@@ -343,31 +343,80 @@ struct ContentView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.22), value: backupManager.progress.assetFraction)
 
-                Text(countPairText)
-                    .font(.system(size: 46, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(skyBlue)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.56)
-                    .padding(.horizontal, 22)
+                VStack(spacing: 6) {
+                    Text(countPairText)
+                        .font(.system(size: 46, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(skyBlue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.56)
+                        .padding(.horizontal, 22)
+
+                    if backupManager.progress.assetPercent >= 100 {
+                        Text(progressPercentText)
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
+                    }
+                }
+
+                if backupManager.progress.assetPercent < 100 {
+                    movingPercentBadge
+                }
             }
             .frame(width: 188, height: 188)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(totalText)
 
-            Text(statusText)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.55))
-                .lineLimit(1)
-
-            if backupManager.isRunning {
-                fileProgressView
-            }
+            progressDetailArea
         }
     }
 
     private var countPairText: String {
         "\(backupManager.progress.displayBackedUpAssets)/\(backupManager.progress.totalAssets)"
+    }
+
+    private var movingPercentBadge: some View {
+        GeometryReader { proxy in
+            Text(progressPercentText)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.78))
+                .position(percentBadgePosition(in: proxy.size))
+                .animation(.easeInOut(duration: 0.22), value: backupManager.progress.assetFraction)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var progressDetailArea: some View {
+        ZStack {
+            if let failureText {
+                Text(failureText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            } else {
+                fileProgressView
+                    .opacity(backupManager.isRunning ? 1 : 0)
+            }
+        }
+        .frame(height: 34)
+        .accessibilityHidden(!backupManager.isRunning && failureText == nil)
+    }
+
+    private var progressPercentText: String {
+        "\(backupManager.progress.assetPercent)%"
+    }
+
+    private func percentBadgePosition(in size: CGSize) -> CGPoint {
+        let radius = min(size.width, size.height) / 2 - 12
+        let angle = (-90 + 360 * backupManager.progress.assetFraction) * .pi / 180
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        return CGPoint(
+            x: center.x + CGFloat(cos(angle)) * radius,
+            y: center.y + CGFloat(sin(angle)) * radius
+        )
     }
 
     private var fileProgressView: some View {
@@ -390,7 +439,7 @@ struct ContentView: View {
             .frame(height: 7)
             .clipShape(Capsule())
         }
-        .frame(maxWidth: 236)
+        .frame(maxWidth: 236, minHeight: 34, maxHeight: 34)
     }
 
     private var currentFileText: String {
@@ -426,11 +475,11 @@ struct ContentView: View {
         return "本手机已备份到 Windows \(backedUp) 项，本手机照片和视频 \(total) 项"
     }
 
-    private var statusText: String {
+    private var failureText: String? {
         if case .failed(let message) = backupManager.progress.status {
             return message
         }
-        return "同步进度：\(backupManager.progress.assetPercent)%"
+        return nil
     }
 
     private func connectionMessage(for error: Error) -> String {

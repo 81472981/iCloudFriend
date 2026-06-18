@@ -56,6 +56,7 @@ struct BackupProgress: Equatable {
     var totalAssets: Int = 0
     var completedAssets: Int = 0
     var windowsBackedUpAssets: Int?
+    var usesSessionProgress: Bool = false
     var failedAssets: Int = 0
     var currentAssetName: String = ""
     var currentResourceName: String = ""
@@ -73,7 +74,10 @@ struct BackupProgress: Equatable {
     }
 
     var displayBackedUpAssets: Int {
-        windowsBackedUpAssets ?? completedAssets
+        if usesSessionProgress {
+            return completedAssets
+        }
+        return windowsBackedUpAssets ?? completedAssets
     }
 
     var headline: String {
